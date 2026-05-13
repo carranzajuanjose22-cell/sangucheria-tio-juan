@@ -160,6 +160,54 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// =====================================
+// RUTAS DE USUARIOS (CRUD)
+// =====================================
+app.get('/api/users', async (_req, res) => {
+  const users = await prisma.user.findMany({
+    select: { id: true, name: true, email: true, role: true, status: true, creadoEn: true }
+  });
+  res.json(users);
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    const data = { ...req.body };
+    if (data.email) data.email = data.email.toLowerCase();
+
+    const user = await prisma.user.create({ data });
+    const { password: _omit, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (error: any) {
+    res.status(400).json({ error: 'Error al crear el usuario', details: error?.message });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const data = { ...req.body };
+    if (data.email) data.email = data.email.toLowerCase();
+
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data,
+    });
+    const { password: _omit, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (error: any) {
+    res.status(400).json({ error: 'Error al actualizar el usuario', details: error?.message });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(400).json({ error: 'Error al eliminar el usuario', details: error?.message });
+  }
+});
+
 // Crea el administrador inicial sólo si todavía no existe (no resetea la contraseña).
 const seedAdmin = async () => {
   const existing = await prisma.user.findUnique({ where: { email: 'admin@sangucheria.com' } });

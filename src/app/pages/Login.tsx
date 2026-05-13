@@ -1,18 +1,35 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Lock, Mail, UserCircle2 } from "lucide-react";
+import { api } from "./api";
 
 export function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.includes("admin")) {
-      navigate("/admin");
-    } else {
-      navigate("/employee");
+    
+    try {
+      const response = await api.post("/auth/login", { 
+        email: email.trim().toLowerCase(), 
+        password: password.trim() 
+      });
+      
+      if (response.success) {
+        // Guardamos los datos del usuario en la sesión
+        localStorage.setItem("pos_user", JSON.stringify(response.user));
+        
+        // Redirigimos según su rol
+        if (response.user.role === "Admin") {
+          navigate("/admin");
+        } else {
+          navigate("/employee");
+        }
+      }
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
     }
   };
 
@@ -70,30 +87,6 @@ export function Login() {
               Iniciar Sesión
             </button>
           </form>
-
-          <div className="mt-8 pt-6 border-t border-gray-100">
-            <p className="text-xs text-center text-gray-500 mb-4">Acceso Rápido (Demo)</p>
-            <div className="flex gap-4">
-              <button
-                onClick={() => {
-                  setEmail("admin@empresa.com");
-                  setPassword("admin123");
-                }}
-                className="flex-1 py-2 px-4 border border-blue-200 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
-              >
-                Admin
-              </button>
-              <button
-                onClick={() => {
-                  setEmail("caja@empresa.com");
-                  setPassword("caja123");
-                }}
-                className="flex-1 py-2 px-4 border border-green-200 text-green-700 rounded-lg text-sm font-medium hover:bg-green-50 transition-colors"
-              >
-                Empleado
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

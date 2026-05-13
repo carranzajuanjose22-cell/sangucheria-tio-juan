@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
+import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Trash2, Calendar } from "lucide-react";
 
 type SaleItem = {
   id: string;
@@ -36,10 +36,24 @@ type RegisterCloseRecord = {
   openedAt?: string;
 };
 
+type PurchaseRecord = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+};
+
 export function Statistics() {
   const [registers, setRegisters] = useState<RegisterCloseRecord[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [dateRange, setDateRange] = useState<"week" | "month" | "all">("week");
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [purchaseDesc, setPurchaseDesc] = useState("");
+  const [purchaseAmount, setPurchaseAmount] = useState("");
+  const [catalog, setCatalog] = useState<any>(null);
+  const [inputs, setInputs] = useState<any[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem("pos_registers");
@@ -51,10 +65,18 @@ export function Statistics() {
     if (savedServices) {
       setServices(JSON.parse(savedServices));
     }
-  }, []);
 
-  // Calculate statistics
-  const allSales = registers.flatMap(r => r.sales || []);
+    const savedPurchases = localStorage.getItem("pos_purchases");
+    if (savedPurchases) {
+      setPurchases(JSON.parse(savedPurchases));
+    }
+
+    const savedCatalog = localStorage.getItem("pos_miga_product");
+    if (savedCatalog) setCatalog(JSON.parse(savedCatalog));
+    
+    const savedInputs = localStorage.getItem("pos_inputs");
+    if (savedInputs) setInputs(JSON.parse(savedInputs));
+  }, []);
 
   // Filter by date range for registers
   const getFilteredRegisters = () => {
@@ -75,6 +97,18 @@ export function Statistics() {
   const filteredRegisters = getFilteredRegisters();
   const filteredSales = filteredRegisters.flatMap(r => r.sales || []);
 
+  // Filter by date range for purchases
+  const getFilteredPurchases = () => {
+    const now = new Date();
+    const cutoffDate = new Date();
+    if (dateRange === "week") cutoffDate.setDate(now.getDate() - 7);
+    else if (dateRange === "month") cutoffDate.setDate(now.getDate() - 30);
+    else return purchases;
+    return purchases.filter(p => new Date(p.date) >= cutoffDate);
+  };
+  const filteredPurchases = getFilteredPurchases();
+  const totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.amount, 0);
+
   // Total revenue
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
 
@@ -92,7 +126,7 @@ export function Statistics() {
   }
   const totalFixedExpenses = (monthlyFixedExpenses / 30) * daysToCalculate;
 
-  const netBalance = totalRevenue - totalVariableExpenses - totalFixedExpenses;
+  const netBalance = totalRevenue - totalVariableExpenses - totalFixedExpenses - totalPurchases;
 
   // Products sold
   const productsSold = filteredSales.reduce((sum, sale) =>
@@ -120,6 +154,42 @@ export function Statistics() {
       }
     }
   });
+
+  // Calcular consumo de Pan de Miga y Tachos de Mayonesa
+  let totalPanDeMigaConsumed = 0;
+  const panDeMigaInput = inputs.find(i => i.name.toLowerCase().includes("miga") && i.name.toLowerCase().includes("pan"));
+
+  filteredSales.forEach(sale => {
+    sale.items.forEach(item => {
+      let itemMatched = false;
+      if (catalog && panDeMigaInput) {
+        const baseId = item.id.split('-')[0];
+        catalog.varieties.forEach((v: any) => {
+          const pres = v.presentations.find((p: any) => p.id === baseId);
+          if (pres) {
+            const recipeItem = pres.recipe.find((r: any) => r.insumoId === panDeMigaInput.id);
+            if (recipeItem) {
+              totalPanDeMigaConsumed += recipeItem.quantity * item.quantity;
+              itemMatched = true;
+            }
+          }
+        });
+      }
+      
+      if (!itemMatched) {
+        const nameLow = item.name.toLowerCase();
+        if (nameLow.includes("docena") && !nameLow.includes("media")) {
+          totalPanDeMigaConsumed += 12 * item.quantity;
+        } else if (nameLow.includes("media docena")) {
+          totalPanDeMigaConsumed += 6 * item.quantity;
+        } else if (nameLow.includes("plancha")) {
+          totalPanDeMigaConsumed += 3 * item.quantity;
+        }
+      }
+    });
+  });
+
+  const tachosMayonesa = Math.floor(totalPanDeMigaConsumed / 18);
 
   // All products breakdown
   const productStats: Record<string, { quantity: number; revenue: number }> = {};
@@ -156,6 +226,34 @@ export function Statistics() {
   const employeeHoursArray = Object.entries(employeeHoursStats)
     .map(([name, stats]) => ({ name, ...stats }))
     .sort((a, b) => b.hours - a.hours);
+
+  const handleRegisterPurchase = () => {
+    const amount = parseFloat(purchaseAmount);
+    if (!purchaseDesc.trim() || isNaN(amount) || amount <= 0) {
+      alert("Por favor ingresa una etiqueta y un monto válido");
+      return;
+    }
+    const newPurchase: PurchaseRecord = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      description: purchaseDesc.trim(),
+      amount,
+    };
+    const updatedPurchases = [...purchases, newPurchase];
+    localStorage.setItem("pos_purchases", JSON.stringify(updatedPurchases));
+    setPurchases(updatedPurchases);
+    setPurchaseDesc("");
+    setPurchaseAmount("");
+    setIsModalOpen(false);
+  };
+
+  const handleDeletePurchase = (id: string) => {
+    if (confirm("¿Estás seguro de que deseas eliminar este registro de compra?")) {
+      const updatedPurchases = purchases.filter(p => p.id !== id);
+      localStorage.setItem("pos_purchases", JSON.stringify(updatedPurchases));
+      setPurchases(updatedPurchases);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -199,7 +297,7 @@ export function Statistics() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-medium text-gray-600">Ingresos Totales</p>
@@ -239,6 +337,17 @@ export function Statistics() {
           </div>
           <p className="text-3xl font-bold text-gray-900">{productsSold}</p>
         </div>
+
+        <div className="bg-yellow-50 p-6 rounded-xl border border-yellow-200 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-yellow-800">Mayonesa (Tachos)</p>
+            <div className="w-10 h-10 bg-yellow-200 rounded-lg flex items-center justify-center">
+              <Package className="w-5 h-5 text-yellow-700" />
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-yellow-900">{tachosMayonesa}</p>
+          <p className="text-xs text-yellow-700 mt-2">Cada 18 u. de pan de miga</p>
+        </div>
       </div>
 
       {/* Balance General Panel */}
@@ -248,9 +357,18 @@ export function Statistics() {
             <Wallet className="w-5 h-5 text-gray-500" />
             Balance General
           </h3>
-          <span className="text-sm font-medium text-gray-500 bg-white px-3 py-1 border border-gray-200 rounded-lg shadow-sm">
-            {dateRange === 'week' ? 'Período: Últimos 7 días' : dateRange === 'month' ? 'Período: Últimos 30 días' : `Período: Histórico (${daysToCalculate} días)`}
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors shadow-sm"
+            >
+              <ShoppingCart size={16} />
+              Ingresar Compra
+            </button>
+            <span className="text-sm font-medium text-gray-500 bg-white px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm">
+              {dateRange === 'week' ? 'Período: Últimos 7 días' : dateRange === 'month' ? 'Período: Últimos 30 días' : `Período: Histórico (${daysToCalculate} días)`}
+            </span>
+          </div>
         </div>
         <div className="p-6">
           <div className="flex flex-col md:flex-row gap-8 items-center justify-between">
@@ -274,6 +392,16 @@ export function Statistics() {
                   <span className="font-medium text-red-900">Gastos Operativos (Caja)</span>
                 </div>
                 <span className="font-bold text-red-700 text-lg">-${totalVariableExpenses.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between items-center p-4 bg-yellow-50/50 rounded-xl border border-yellow-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center">
+                    <ShoppingCart size={20} />
+                  </div>
+                  <span className="font-medium text-yellow-900">Compras de Insumos</span>
+                </div>
+                <span className="font-bold text-yellow-700 text-lg">-${totalPurchases.toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between items-center p-4 bg-orange-50/50 rounded-xl border border-orange-100">
@@ -389,6 +517,130 @@ export function Statistics() {
           </div>
         </div>
       </div>
+
+      {/* Historial de Compras */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-gray-500" />
+            Detalle de Compras de Insumos
+          </h3>
+        </div>
+        <div className="p-0 overflow-x-auto">
+          {filteredPurchases.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No hay compras registradas en este período</p>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50/50 border-b border-gray-100">
+                  <th className="px-6 py-3 text-sm font-semibold text-gray-600">Fecha</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-gray-600">Descripción / Etiqueta</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-gray-600 text-right">Monto</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-gray-600 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredPurchases.slice().reverse().map((purchase) => (
+                  <tr key={purchase.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Calendar size={14} />
+                        <span className="text-sm">
+                          {new Date(purchase.date).toLocaleDateString("es-AR")}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <span className="font-medium text-gray-900">{purchase.description}</span>
+                    </td>
+                    <td className="px-6 py-3 text-right">
+                      <span className="font-bold text-red-600">-${purchase.amount.toFixed(2)}</span>
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <button
+                        onClick={() => handleDeletePurchase(purchase.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar registro"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL DE COMPRAS DE INSUMOS */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900">Registrar Compra de Insumos</h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Etiqueta / Descripción (Ej. Carne, Pan, Verduras)
+                </label>
+                <input
+                  type="text"
+                  value={purchaseDesc}
+                  onChange={(e) => setPurchaseDesc(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="¿Qué insumos compraste?"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Monto del Gasto
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={purchaseAmount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setPurchaseAmount(value);
+                      }
+                    }}
+                    className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRegisterPurchase}
+                className="flex-1 bg-orange-500 text-white py-2.5 rounded-lg font-medium hover:bg-orange-600 transition-colors"
+              >
+                Registrar Gasto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

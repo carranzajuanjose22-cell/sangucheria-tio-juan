@@ -1,16 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
-import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown } from "lucide-react";
+import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid } from "lucide-react";
 
-// Mock products
-const mockProducts = [
-  { id: "1", name: "Sánguche de Paleta", price: 3500 },
-  { id: "2", name: "Sánguche de Jamón Crudo", price: 5000 },
-  { id: "3", name: "Sánguche de Salame", price: 4200 },
-  { id: "4", name: "Café con Leche", price: 1800 },
-  { id: "5", name: "Jugo de Naranja", price: 2000 },
-  { id: "6", name: "Porción de Torta", price: 3200 },
-];
 
 type CartItem = {
   id: string;
@@ -19,10 +10,8 @@ type CartItem = {
   quantity: number;
 };
 
-type PaymentMethod = "Efectivo" | "Débito" | "Transferencia" | "QR";
-
 type Payment = {
-  method: PaymentMethod;
+  method: string;
   amount: number;
 };
 
@@ -31,7 +20,7 @@ export type SaleRecord = {
   date: string;
   items: CartItem[];
   total: number;
-  paymentMethod: PaymentMethod | string; // Keep for backward compatibility
+  paymentMethod: string;
   payments?: Payment[]; // New field for multiple payments
   employee: string;
   registerNumber: string;
@@ -59,7 +48,7 @@ export function EmployeePos() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([{ method: "Efectivo", amount: 0 }]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [modalState, setModalState] = useState<"none" | "success" | "ticket" | "openRegister" | "closeRegister" | "closeSuccess" | "expense">("none");
   const [lastSale, setLastSale] = useState<SaleRecord | null>(null);
   const [registerState, setRegisterState] = useState<RegisterState | null>(null);
@@ -68,6 +57,13 @@ export function EmployeePos() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expenseDesc, setExpenseDesc] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
+  const [migaMatrix, setMigaMatrix] = useState<any[]>([]);
+  const [otherProducts, setOtherProducts] = useState<any[]>([]);
+  const [migaTitle, setMigaTitle] = useState("Sándwiches de Miga");
+  const [migaHeaders, setMigaHeaders] = useState<string[]>(["Docena", "Media Docena", "Plancha de 3"]);
+  const [migaOptionModal, setMigaOptionModal] = useState(false);
+  const [pendingMigaProduct, setPendingMigaProduct] = useState<any>(null);
+  const [availablePayments, setAvailablePayments] = useState<any[]>([]);
 
   useEffect(() => {
     // Load register state
@@ -84,6 +80,65 @@ export function EmployeePos() {
 
     // Refresh every 2 seconds to sync with admin changes
     const interval = setInterval(loadRegisterState, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const loadPayments = () => {
+      const saved = localStorage.getItem("pos_payments");
+      let loaded = [];
+      if (saved) {
+        loaded = JSON.parse(saved);
+        setAvailablePayments(loaded);
+      } else {
+        // Fallback default
+        loaded = [
+          { id: "1", name: "Efectivo", surcharge: 0 },
+          { id: "2", name: "Débito", surcharge: 10 },
+          { id: "3", name: "Transferencia", surcharge: 0 },
+          { id: "4", name: "QR", surcharge: 5 },
+        ];
+        setAvailablePayments(loaded);
+      }
+
+      setPayments(prev => {
+        if (prev.length === 0 && loaded.length > 0) {
+          return [{ method: loaded[0].name, amount: 0 }];
+        }
+        return prev;
+      });
+    };
+    loadPayments();
+    const interval = setInterval(loadPayments, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Cargar productos finales configurados en ProductBuilder
+    const loadMigaProduct = () => {
+      const savedProduct = localStorage.getItem("pos_miga_product");
+      if (savedProduct) {
+        const parsed = JSON.parse(savedProduct);
+        setMigaTitle(parsed.name || "Sándwiches de Miga");
+
+        // Extraer las presentaciones (columnas) dinámicamente
+        const headers = parsed.varieties.length > 0
+          ? parsed.varieties[0].presentations.map((p: any) => p.name)
+          : ["Docena", "Media Docena", "Plancha de 3"];
+        setMigaHeaders(headers);
+
+        const mappedMatrix = parsed.varieties.map((v: any) => {
+          const presObj: any = {};
+          v.presentations.forEach((p: any) => {
+            presObj[p.name] = { id: p.id, name: `${p.name} de ${v.name}`, price: p.price || 0 };
+          });
+          return { variety: v.name, presentations: presObj };
+        });
+        setMigaMatrix(mappedMatrix);
+      }
+    };
+    loadMigaProduct();
+    const interval = setInterval(loadMigaProduct, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -131,7 +186,11 @@ export function EmployeePos() {
   const totalSalesToday = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalExpensesToday = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-  const filteredProducts = mockProducts.filter(p => 
+  const filteredMiga = migaMatrix.filter(row => 
+    row.variety.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredOther = otherProducts.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -143,6 +202,16 @@ export function EmployeePos() {
       }
       return [...current, { ...product, quantity: 1 }];
     });
+  };
+
+  const handleConfirmMigaOption = (option: string) => {
+    if (pendingMigaProduct) {
+      const finalName = option ? `${pendingMigaProduct.name} (${option})` : pendingMigaProduct.name;
+      const finalId = option ? `${pendingMigaProduct.id}-${option}` : pendingMigaProduct.id;
+      addToCart({ ...pendingMigaProduct, name: finalName, id: finalId });
+    }
+    setMigaOptionModal(false);
+    setPendingMigaProduct(null);
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -172,12 +241,16 @@ export function EmployeePos() {
     setCart(current => current.filter(item => item.id !== id));
   };
 
-  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const mainMethod = availablePayments.find(p => p.name === payments[0]?.method);
+  const surchargePercent = mainMethod?.surcharge || 0;
+  const surchargeAmount = (cartSubtotal * surchargePercent) / 100;
+  const total = cartSubtotal + surchargeAmount;
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const remaining = total - totalPaid;
 
   const addPaymentMethod = () => {
-    setPayments([...payments, { method: "Efectivo", amount: 0 }]);
+    setPayments([...payments, { method: availablePayments[0]?.name || "", amount: 0 }]);
   };
 
   const removePaymentMethod = (index: number) => {
@@ -224,7 +297,7 @@ export function EmployeePos() {
     setLastSale(newSale);
     setModalState("success");
     setCart([]);
-    setPayments([{ method: "Efectivo", amount: 0 }]);
+    setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
   };
 
   const handleOpenRegister = () => {
@@ -372,28 +445,101 @@ export function EmployeePos() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => !isRegisterClosed && addToCart(product)}
-                  disabled={isRegisterClosed}
-                  className="flex flex-col text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-blue-500 hover:shadow-md transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:shadow-none"
-                >
-                  <span className="font-medium text-gray-900 group-hover:text-blue-700 transition-colors line-clamp-2">
-                    {product.name}
-                  </span>
-                  <span className="mt-2 text-blue-600 font-bold">
-                    ${product.price}
-                  </span>
-                </button>
-              ))}
-              {filteredProducts.length === 0 && (
-                <div className="col-span-full py-12 text-center text-gray-500">
-                  No se encontraron productos.
+            {/* CUADRO COMPARATIVO MIGA */}
+            {filteredMiga.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
+                  <LayoutGrid className="text-blue-600" size={20} />
+                  Cuadro de {migaTitle}
+                </h3>
+                <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
+                  <table className="w-full text-left border-collapse bg-white">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="px-4 py-3 text-sm font-bold text-gray-700 border-r border-gray-200">Variedad</th>
+                        {migaHeaders.map(header => (
+                          <th key={header} className="px-4 py-3 text-sm font-bold text-gray-700 text-center border-r border-gray-200 last:border-0">{header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredMiga.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                          <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-200 bg-gray-50/50">
+                            {row.variety}
+                          </td>
+                          {migaHeaders.map((pres) => {
+                            const product = row.presentations[pres];
+                            if (!product) return <td key={pres} className="px-2 py-2 border-r border-gray-200 last:border-0 align-middle"></td>;
+                            return (
+                              <td key={pres} className="px-2 py-2 border-r border-gray-200 last:border-0 align-middle">
+                                <button
+                                  onClick={() => {
+                                    if (!isRegisterClosed) {
+                                      // Verificamos si la variedad contiene las palabras clave
+                                      const requiresOptions = /jamón|jamon|paleta|ternera/i.test(row.variety);
+                                      
+                                      if (requiresOptions) {
+                                        setPendingMigaProduct(product);
+                                        setMigaOptionModal(true);
+                                      } else {
+                                        addToCart(product);
+                                      }
+                                    }
+                                  }}
+                                  disabled={isRegisterClosed}
+                                  className="w-full h-full flex flex-col items-center justify-center py-2 px-1 rounded-lg hover:bg-white hover:shadow-sm border border-transparent hover:border-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                                >
+                                  <span className="text-blue-600 font-black text-base group-hover:scale-110 transition-transform">
+                                    ${product.price}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-semibold uppercase mt-1 tracking-wider">Agregar</span>
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* OTROS PRODUCTOS */}
+            {filteredOther.length > 0 && (
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
+                  <Tag className="text-orange-500" size={20} />
+                  Otros Productos
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {filteredOther.map((product) => (
+                    <button
+                      key={product.id}
+                      onClick={() => !isRegisterClosed && addToCart(product)}
+                      disabled={isRegisterClosed}
+                      className="flex flex-col text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-orange-400 hover:shadow-md transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="font-medium text-gray-900 group-hover:text-orange-600 transition-colors line-clamp-2">
+                        {product.name}
+                      </span>
+                      <span className="mt-2 text-orange-500 font-bold">
+                        ${product.price}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredMiga.length === 0 && filteredOther.length === 0 && (
+              <div className="py-16 flex flex-col items-center justify-center text-gray-400">
+                <LayoutGrid className="w-16 h-16 mb-4 text-gray-300" />
+                <p className="text-lg font-bold text-gray-500">No hay productos en tu catálogo</p>
+                <p className="text-sm mt-2 text-center max-w-sm">Ve a <span className="font-medium text-gray-700">Configuración</span> y haz clic en "Guardar Catálogo" para que aparezcan aquí.</p>
+              </div>
+            )}
           </div>
 
           {/* Overlay when register is closed */}
@@ -417,9 +563,24 @@ export function EmployeePos() {
               <Receipt className="w-5 h-5 mr-2 text-gray-500" />
               Venta Actual
             </h2>
-            <span className="text-sm font-medium px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">
-              {cart.reduce((sum, item) => sum + item.quantity, 0)} items
-            </span>
+            <div className="flex gap-2 items-center">
+              {cart.length > 0 && (
+                <button 
+                  onClick={() => {
+                    if (confirm("¿Estás seguro de vaciar el carrito?")) {
+                      setCart([]);
+                      setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
+                    }
+                  }}
+                  className="text-xs font-medium px-2.5 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition-colors"
+                >
+                  Vaciar
+                </button>
+              )}
+              <span className="text-sm font-medium px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)} items
+              </span>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
@@ -472,9 +633,21 @@ export function EmployeePos() {
           </div>
 
           <div className="p-4 border-t border-gray-200 bg-gray-50/50">
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-gray-600 font-medium">Total a cobrar</span>
-              <span className="text-2xl font-bold text-gray-900">${total}</span>
+            <div className="space-y-1 mb-4">
+              <div className="flex justify-between items-center text-sm text-gray-600">
+                <span>Subtotal</span>
+                <span>${cartSubtotal.toFixed(2)}</span>
+              </div>
+              {surchargeAmount > 0 && (
+                <div className="flex justify-between items-center text-sm text-orange-600">
+                  <span>Recargo ({surchargePercent}%)</span>
+                  <span>${surchargeAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                <span className="text-gray-900 font-medium">Total a cobrar</span>
+                <span className="text-2xl font-bold text-gray-900">${total.toFixed(2)}</span>
+              </div>
             </div>
 
             <div className="mb-4">
@@ -495,14 +668,15 @@ export function EmployeePos() {
                   <div key={index} className="flex gap-2 items-center">
                     <select
                       value={payment.method}
-                      onChange={(e) => updatePayment(index, "method", e.target.value as PaymentMethod)}
+                      onChange={(e) => updatePayment(index, "method", e.target.value)}
                       className="flex-1 border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2 px-3 border bg-white text-sm"
                       disabled={isRegisterClosed}
                     >
-                      <option value="Efectivo">Efectivo</option>
-                      <option value="Débito">Débito</option>
-                      <option value="Transferencia">Transferencia</option>
-                      <option value="QR">QR</option>
+                      {availablePayments.map(p => (
+                        <option key={p.id} value={p.name}>
+                          {p.name} {p.surcharge > 0 ? `(+${p.surcharge}%)` : ""}
+                        </option>
+                      ))}
                     </select>
                     <div className="relative flex-1">
                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
@@ -902,6 +1076,12 @@ export function EmployeePos() {
                           <span className="font-medium">${item.price * item.quantity}</span>
                         </div>
                       ))}
+                      {lastSale.total > lastSale.items.reduce((s,i) => s + i.price * i.quantity, 0) && (
+                        <div className="p-3 flex justify-between items-center text-sm hover:bg-gray-50 text-orange-600">
+                          <span className="font-medium">Recargo por Método de Pago</span>
+                          <span className="font-medium">${(lastSale.total - lastSale.items.reduce((s,i) => s + i.price * i.quantity, 0)).toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -945,6 +1125,12 @@ export function EmployeePos() {
                       <span>${item.price * item.quantity}</span>
                     </div>
                   ))}
+                  {lastSale.total > lastSale.items.reduce((s,i) => s + i.price * i.quantity, 0) && (
+                    <div className="flex justify-between text-gray-700">
+                      <div>Recargo por Método de Pago</div>
+                      <span>${(lastSale.total - lastSale.items.reduce((s,i) => s + i.price * i.quantity, 0)).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-gray-900 pt-3">
@@ -1011,6 +1197,59 @@ export function EmployeePos() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MIGA OPTIONS MODAL */}
+      {migaOptionModal && pendingMigaProduct && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900">Variante del Sándwich</h3>
+              <button 
+                onClick={() => {
+                  setMigaOptionModal(false);
+                  setPendingMigaProduct(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-center text-gray-600 mb-6">
+                ¿Con qué acompañamiento se preparará <strong>{pendingMigaProduct.name}</strong>?
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => handleConfirmMigaOption("Con Queso")}
+                  className="py-3 px-4 bg-yellow-100 text-yellow-800 font-bold rounded-xl border border-yellow-200 hover:bg-yellow-200 transition-colors"
+                >
+                  Con Queso
+                </button>
+                <button 
+                  onClick={() => handleConfirmMigaOption("Con Verdura")}
+                  className="py-3 px-4 bg-green-100 text-green-800 font-bold rounded-xl border border-green-200 hover:bg-green-200 transition-colors"
+                >
+                  Con Verdura
+                </button>
+                <button 
+                  onClick={() => handleConfirmMigaOption("Surtido / Mixto")}
+                  className="py-3 px-4 bg-orange-100 text-orange-800 font-bold rounded-xl border border-orange-200 hover:bg-orange-200 transition-colors col-span-2"
+                >
+                  Surtido (Mitad y Mitad)
+                </button>
+                <button 
+                  onClick={() => handleConfirmMigaOption("")}
+                  className="py-3 px-4 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors col-span-2"
+                >
+                  Sin Aclaración / Normal
+                </button>
+              </div>
             </div>
           </div>
         </div>

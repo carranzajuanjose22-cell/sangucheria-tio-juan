@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Receipt, ShoppingCart, Clock, Calendar, Activity, Lock, Unlock, X, CheckCircle2, TrendingDown } from "lucide-react";
+import { Receipt, ShoppingCart, Clock, Lock, Unlock, X, CheckCircle2, Eye } from "lucide-react";
 
 type SaleItem = {
   id: string;
@@ -34,6 +34,7 @@ export function Dashboard() {
   const [initialCashInput, setInitialCashInput] = useState("");
   const [registers, setRegisters] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [selectedTicket, setSelectedTicket] = useState<SaleRecord | null>(null);
 
   useEffect(() => {
     // Update time every second
@@ -345,9 +346,18 @@ export function Dashboard() {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">${sale.total}</p>
-                        <p className="text-xs text-gray-500">{sale.items.length} producto{sale.items.length !== 1 ? 's' : ''}</p>
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <p className="font-bold text-gray-900">${sale.total}</p>
+                          <p className="text-xs text-gray-500">{sale.items.length} producto{sale.items.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedTicket(sale)}
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Ver detalle del ticket"
+                        >
+                          <Eye size={20} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -528,6 +538,77 @@ export function Dashboard() {
                 className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
               >
                 Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TICKET DETAILS MODAL */}
+      {selectedTicket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Receipt size={18} className="text-gray-500" />
+                Detalle del Ticket #{selectedTicket.id}
+              </h3>
+              <button
+                onClick={() => setSelectedTicket(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="flex justify-between items-center mb-4 text-sm text-gray-500">
+                <span>{new Date(selectedTicket.date).toLocaleDateString("es-AR")} - {new Date(selectedTicket.date).toLocaleTimeString("es-AR", { hour12: false })}</span>
+                <span>Cajero: {selectedTicket.employee}</span>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <h4 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">Productos Vendidos</h4>
+                <div className="space-y-2">
+                  {selectedTicket.items.map(item => (
+                    <div key={item.id} className="flex justify-between items-center text-sm">
+                      <span className="text-gray-700">{item.quantity}x {item.name}</span>
+                      <span className="font-medium text-gray-900">${item.price * item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4 space-y-2">
+                <div className="flex justify-between items-center font-bold text-lg">
+                  <span className="text-gray-900">Total</span>
+                  <span className="text-blue-600">${selectedTicket.total}</span>
+                </div>
+                <div className="mt-2 text-sm text-gray-500">
+                  <span className="block mb-1">Medio(s) de Pago:</span>
+                  {selectedTicket.payments && selectedTicket.payments.length > 0 ? (
+                    selectedTicket.payments.map((p, idx) => (
+                      <div key={idx} className="flex justify-between">
+                        <span className="uppercase">{p.method}</span>
+                        <span className="font-medium">${p.amount.toFixed(2)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="uppercase">{selectedTicket.paymentMethod}</span>
+                      <span className="font-medium">${selectedTicket.total}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setSelectedTicket(null)}
+                className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cerrar
               </button>
             </div>
           </div>
