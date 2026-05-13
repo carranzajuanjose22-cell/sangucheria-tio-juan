@@ -1,0 +1,57 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// --- MODELOS ---
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  role      String   @default("Usuario")
+  status    String   @default("Activo")
+  creadoEn  DateTime @default(now())
+}
+
+// Insumos de la sanguchería
+model InputItem {
+  id          String   @id @default(uuid())
+  name        String
+  isFood      Boolean  @default(true)
+  price       Float
+  creadoEn    DateTime @default(now())
+  actualizado DateTime @updatedAt
+}
+
+// Servicios
+model Service {
+  id        String   @id @default(uuid())
+  name      String
+  cost      Float
+  creadoEn  DateTime @default(now())
+}
+
+// Métodos de pago
+model PaymentMethod {
+  id        String   @id @default(uuid())
+  name      String
+  surcharge Float    @default(0)
+  creadoEn  DateTime @default(now())
+}
+
+// Catálogo
+model Catalog {
+  id          String   @id @default(uuid())
+  type        String   @unique
+  descripcion String?
+  data        String   // Campo necesario para la lógica de tu sistema
+  creadoEn    DateTime @default(now())
+  actualizado DateTime @updatedAt
+}
