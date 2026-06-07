@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
-import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid } from "lucide-react";
+import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock } from "lucide-react";
+import { api } from "./api.js";
 
 export function EmployeePos() {
   const location = useLocation();
@@ -23,8 +24,15 @@ export function EmployeePos() {
   const [migaTitle, setMigaTitle] = useState("Sándwiches de Miga");
   const [migaHeaders, setMigaHeaders] = useState(["Docena", "Media Docena", "Plancha de 3"]);
   const [migaOptionModal, setMigaOptionModal] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [payingOrder, setPayingOrder] = useState(null);
   const [pendingMigaProduct, setPendingMigaProduct] = useState(null);
+  const [customNote, setCustomNote] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [advanceNote, setAdvanceNote] = useState("");
   const [availablePayments, setAvailablePayments] = useState([]);
+  const [inputs, setInputs] = useState([]);
+  const [eggCount, setEggCount] = useState(0);
 
   useEffect(() => {
     const load = () => {
@@ -34,6 +42,20 @@ export function EmployeePos() {
     };
     load();
     const interval = setInterval(load, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const loadInputs = async () => {
+      try {
+        const data = await api.get("/inputs");
+        setInputs(data);
+      } catch (error) {
+        console.error("Error cargando insumos en POS:", error);
+      }
+    };
+    loadInputs();
+    const interval = setInterval(loadInputs, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -91,6 +113,14 @@ export function EmployeePos() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const load = () => {
+      const saved = localStorage.getItem("pos_pending_orders");
+      setPendingOrders(saved ? JSON.parse(saved) : []);
+    };
+    load();
+  }, []);
+
   const currentDate = new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const isRegisterClosed = !registerState?.isOpen;
   const totalSalesToday = sales.reduce((sum, sale) => sum + sale.total, 0);
@@ -108,9 +138,18 @@ export function EmployeePos() {
 
   const handleConfirmMigaOption = (option) => {
     if (pendingMigaProduct) {
-      const finalName = option ? `${pendingMigaProduct.name} (${option})` : pendingMigaProduct.name;
-      const finalId = option ? `${pendingMigaProduct.id}-${option}` : pendingMigaProduct.id;
-      addToCart({ ...pendingMigaProduct, name: finalName, id: finalId });
+      let finalName = option ? `${pendingMigaProduct.name} (${option})` : pendingMigaProduct.name;
+      let finalPrice = pendingMigaProduct.price || 0;
+      
+      if (eggCount > 0) {
+        const eggInput = inputs.find((i) => i.name.toLowerCase().includes("huevo"));
+        const eggPrice = eggInput ? eggInput.price : 0;
+        finalPrice += eggPrice * eggCount;
+        finalName += ` + ${eggCount} Huevo${eggCount > 1 ? "s" : ""}`;
+      }
+      
+      const finalId = option ? `${pendingMigaProduct.id}-${option}-e${eggCount}` : `${pendingMigaProduct.id}-e${eggCount}`;
+      addToCart({ ...pendingMigaProduct, name: finalName, id: finalId, price: finalPrice });
     }
     setMigaOptionModal(false);
     setPendingMigaProduct(null);
@@ -125,10 +164,11 @@ export function EmployeePos() {
   };
 
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const currentSubtotal = payingOrder ? payingOrder.total : cartSubtotal;
   const mainMethod = availablePayments.find((p) => p.name === payments[0]?.method);
   const surchargePercent = mainMethod?.surcharge || 0;
-  const surchargeAmount = (cartSubtotal * surchargePercent) / 100;
-  const total = cartSubtotal + surchargeAmount;
+  const surchargeAmount = (currentSubtotal * surchargePercent) / 100;
+  const total = currentSubtotal + surchargeAmount;
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const remaining = total - totalPaid;
 
@@ -138,18 +178,58 @@ export function EmployeePos() {
     setPayments(newPayments);
   };
 
-  const handleRegisterSale = () => {
+  const handleLoadOrder = () => {
     if (cart.length === 0 || isRegisterClosed) return;
+    const newOrder = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      items: [...cart],
+      total: cartSubtotal,
+      customerName: customerName.trim(),
+      advanceNote: advanceNote.trim()
+    };
+    const updated = [...pendingOrders, newOrder];
+    setPendingOrders(updated);
+    localStorage.setItem("pos_pending_orders", JSON.stringify(updated));
+    setCart([]);
+    setCustomerName("");
+    setAdvanceNote("");
+  };
+
+  const handleDiscardOrder = (id) => {
+    if (confirm("¿Estás seguro de descartar este pedido?")) {
+      const updated = pendingOrders.filter(o => o.id !== id);
+      setPendingOrders(updated);
+      localStorage.setItem("pos_pending_orders", JSON.stringify(updated));
+    }
+  };
+
+  const handleOpenPayment = (order) => {
+    setPayingOrder(order);
+    const defaultMethod = availablePayments[0];
+    const surcharge = defaultMethod?.surcharge || 0;
+    const initialTotal = order.total + (order.total * surcharge / 100);
+    setPayments([{ method: defaultMethod?.name || "", amount: parseFloat(initialTotal.toFixed(2)) }]);
+    setModalState("payment");
+  };
+
+  const handleRegisterSale = () => {
+    if (!payingOrder || isRegisterClosed) return;
     if (totalPaid < total) { alert(`Falta pagar $${remaining.toFixed(2)}`); return; }
     const paymentMethodStr = payments.length === 1 ? payments[0].method : payments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
-    const newSale = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), items: [...cart], total, paymentMethod: paymentMethodStr, payments: [...payments], employee: userName, registerNumber: "Caja 01" };
+    const newSale = { id: payingOrder.id, date: new Date().toISOString(), items: [...payingOrder.items], total, paymentMethod: paymentMethodStr, payments: [...payments], employee: userName, registerNumber: "Caja 01" };
     const existingSales = JSON.parse(localStorage.getItem("pos_sales") || "[]");
     const updatedSales = [...existingSales, newSale];
     localStorage.setItem("pos_sales", JSON.stringify(updatedSales));
     setSales(updatedSales);
     setLastSale(newSale);
+
+    const updatedPending = pendingOrders.filter(o => o.id !== payingOrder.id);
+    setPendingOrders(updatedPending);
+    localStorage.setItem("pos_pending_orders", JSON.stringify(updatedPending));
+
     setModalState("success");
-    setCart([]);
+    setPayingOrder(null);
     setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
   };
 
@@ -194,7 +274,7 @@ export function EmployeePos() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto h-[calc(100vh-6rem)] flex flex-col gap-4">
+    <div className="max-w-7xl mx-auto flex flex-col gap-6 pb-8">
       <div className="flex flex-wrap items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div>
           <h1 className="text-xl font-bold text-gray-900 capitalize">{currentDate}</h1>
@@ -225,7 +305,7 @@ export function EmployeePos() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-6 h-[65vh] min-h-[500px]">
         <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
           <div className="p-4 border-b border-gray-200 bg-white">
             <div className="relative">
@@ -258,9 +338,10 @@ export function EmployeePos() {
                                 <button
                                   onClick={() => {
                                     if (!isRegisterClosed) {
-                                      const requiresOptions = /jamón|jamon|paleta|ternera/i.test(row.variety);
-                                      if (requiresOptions) { setPendingMigaProduct(product); setMigaOptionModal(true); }
-                                      else addToCart(product);
+                                    setPendingMigaProduct(product);
+                                    setCustomNote("");
+                                    setEggCount(0);
+                                    setMigaOptionModal(true);
                                     }
                                   }}
                                   disabled={isRegisterClosed}
@@ -351,49 +432,30 @@ export function EmployeePos() {
           </div>
 
           <div className="p-4 border-t border-gray-200 bg-gray-50/50">
-            <div className="space-y-1 mb-4">
-              <div className="flex justify-between items-center text-sm text-gray-600"><span>Subtotal</span><span>${cartSubtotal.toFixed(2)}</span></div>
-              {surchargeAmount > 0 && <div className="flex justify-between items-center text-sm text-orange-600"><span>Recargo ({surchargePercent}%)</span><span>${surchargeAmount.toFixed(2)}</span></div>}
-              <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                <span className="text-gray-900 font-medium">Total a cobrar</span>
-                <span className="text-2xl font-bold text-gray-900">${total.toFixed(2)}</span>
-              </div>
+            <div className="mb-3 flex gap-2">
+              <input
+                type="text"
+                placeholder="Nombre Cliente (Opcional)"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-orange-500 bg-white"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                disabled={isRegisterClosed || cart.length === 0}
+              />
+              <input
+                type="text"
+                placeholder="¿Pagado/Seña?"
+                className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-green-500 bg-white"
+                value={advanceNote}
+                onChange={(e) => setAdvanceNote(e.target.value)}
+                disabled={isRegisterClosed || cart.length === 0}
+              />
             </div>
-
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">Formas de Pago</label>
-                <button onClick={() => setPayments([...payments, { method: availablePayments[0]?.name || "", amount: 0 }])} className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1" disabled={isRegisterClosed}>
-                  <Plus className="w-3 h-3" /> Agregar
-                </button>
-              </div>
-              <div className="space-y-2">
-                {payments.map((payment, index) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <select value={payment.method} onChange={(e) => updatePayment(index, "method", e.target.value)} className="flex-1 border-gray-300 rounded-lg py-2 px-3 border bg-white text-sm" disabled={isRegisterClosed}>
-                      {availablePayments.map((p) => <option key={p.id} value={p.name}>{p.name} {p.surcharge > 0 ? `(+${p.surcharge}%)` : ""}</option>)}
-                    </select>
-                    <div className="relative flex-1">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-                      <input type="text" inputMode="decimal" value={payment.amount || ""} onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) updatePayment(index, "amount", v === "" ? 0 : parseFloat(v)); }} className="w-full pl-5 pr-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="0.00" disabled={isRegisterClosed} />
-                    </div>
-                    {payments.length > 1 && (
-                      <button onClick={() => setPayments(payments.filter((_, i) => i !== index))} className="p-2 text-gray-400 hover:text-red-600" disabled={isRegisterClosed}>
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 pt-3 border-t border-gray-200 space-y-1">
-                <div className="flex justify-between text-sm"><span className="text-gray-600">Total pagado:</span><span className="font-medium text-gray-900">${totalPaid.toFixed(2)}</span></div>
-                {remaining > 0 && <div className="flex justify-between text-sm"><span className="text-red-600">Falta:</span><span className="font-bold text-red-600">${remaining.toFixed(2)}</span></div>}
-                {remaining < 0 && <div className="flex justify-between text-sm"><span className="text-green-600">Cambio:</span><span className="font-bold text-green-600">${Math.abs(remaining).toFixed(2)}</span></div>}
-              </div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-gray-900 font-medium text-lg">Total del Pedido</span>
+              <span className="text-3xl font-bold text-blue-600">${cartSubtotal.toFixed(2)}</span>
             </div>
-
-            <button onClick={handleRegisterSale} disabled={cart.length === 0 || isRegisterClosed || totalPaid < total} className={`w-full py-3 px-4 rounded-xl font-bold text-white transition-colors ${cart.length === 0 || isRegisterClosed || totalPaid < total ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 shadow-sm"}`}>
-              Registrar Venta
+            <button onClick={handleLoadOrder} disabled={cart.length === 0 || isRegisterClosed} className={`w-full py-3 px-4 rounded-xl font-bold text-white transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-300 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600 shadow-sm flex justify-center items-center gap-2"}`}>
+              <Clock size={18} /> Cargar Orden a Preparación
             </button>
           </div>
 
@@ -407,6 +469,52 @@ export function EmployeePos() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-shrink-0">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <Clock className="w-6 h-6 text-orange-500" /> Pedidos en Preparación ({pendingOrders.length})
+          </h2>
+        </div>
+        {pendingOrders.length === 0 ? (
+          <div className="py-8 text-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+            <p>No hay pedidos en preparación actualmente.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {pendingOrders.map(order => (
+              <div key={order.id} className="border border-orange-200 bg-orange-50/30 rounded-xl p-4 flex flex-col h-64">
+                <div className="flex justify-between items-start mb-3 border-b border-orange-100 pb-3">
+                  <div>
+                    <span className="font-bold text-gray-900">Orden #{order.id.toUpperCase()}</span>
+                    {order.customerName && (
+                      <p className="font-bold text-orange-600 text-sm mt-0.5">{order.customerName}</p>
+                    )}
+                    {order.advanceNote && (
+                      <p className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded border border-green-200">
+                        Nota: {order.advanceNote}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">{new Date(order.date).toLocaleTimeString("es-AR", {hour12: false})}</p>
+                  </div>
+                  <span className="font-bold text-blue-700">${order.total.toFixed(2)}</span>
+                </div>
+                <ul className="flex-1 space-y-1 mb-4 overflow-y-auto pr-1">
+                  {order.items.map(item => (
+                    <li key={item.id} className="text-sm text-gray-700 flex justify-between font-medium">
+                      <span>{item.quantity}x {item.name}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex gap-2 mt-auto">
+                  <button onClick={() => handleDiscardOrder(order.id)} className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50">Descartar</button>
+                  <button onClick={() => handleOpenPayment(order)} className="flex-1 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600">Cobrar y Registrar</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {modalState === "openRegister" && (
@@ -523,17 +631,169 @@ export function EmployeePos() {
         </div>
       )}
 
+      {modalState === "payment" && payingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-gray-50 border-b p-4 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-gray-900">Cobrar y Registrar Venta</h3>
+              <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              {payingOrder.advanceNote && (
+                <div className="mb-4 bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-2">
+                  <Tag className="text-green-600 w-5 h-5 flex-shrink-0" />
+                  <p className="text-sm font-bold text-green-800">Nota de Pago/Seña: <span className="font-medium text-green-700">{payingOrder.advanceNote}</span></p>
+                </div>
+              )}
+              <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600 font-medium">Subtotal del Pedido</span>
+                  <span className="text-lg font-bold text-gray-900">${payingOrder.total.toFixed(2)}</span>
+                </div>
+                {surchargeAmount > 0 && (
+                  <div className="flex justify-between items-center text-orange-600 mb-2">
+                    <span>Recargo ({surchargePercent}%)</span>
+                    <span className="font-bold">${surchargeAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-3 border-t border-blue-200">
+                  <span className="text-gray-900 font-bold">Total a Cobrar</span>
+                  <span className="text-2xl font-black text-blue-700">${total.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Formas de Pago</label>
+                  <button onClick={() => setPayments([...payments, { method: availablePayments[0]?.name || "", amount: 0 }])} className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> Agregar
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {payments.map((payment, index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <select value={payment.method} onChange={(e) => updatePayment(index, "method", e.target.value)} className="flex-1 border-gray-300 rounded-lg py-2 px-3 border bg-white text-sm">
+                        {availablePayments.map((p) => <option key={p.id} value={p.name}>{p.name} {p.surcharge > 0 ? `(+${p.surcharge}%)` : ""}</option>)}
+                      </select>
+                      <div className="relative flex-1">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                        <input type="text" inputMode="decimal" value={payment.amount || ""} onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) updatePayment(index, "amount", v === "" ? 0 : parseFloat(v)); }} className="w-full pl-5 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+                      </div>
+                      {payments.length > 1 && <button onClick={() => setPayments(payments.filter((_, i) => i !== index))} className="p-2 text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button>}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-3 border-t border-gray-200 space-y-1">
+                  <div className="flex justify-between text-sm"><span className="text-gray-600">Total ingresado:</span><span className="font-medium text-gray-900">${totalPaid.toFixed(2)}</span></div>
+                  {remaining > 0 && <div className="flex justify-between text-sm"><span className="text-red-600">Falta cobrar:</span><span className="font-bold text-red-600">${remaining.toFixed(2)}</span></div>}
+                  {remaining < 0 && <div className="flex justify-between text-sm"><span className="text-green-600">Cambio a devolver:</span><span className="font-bold text-green-600">${Math.abs(remaining).toFixed(2)}</span></div>}
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3 shrink-0">
+              <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
+              <button onClick={handleRegisterSale} disabled={totalPaid < total} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < total ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {migaOptionModal && pendingMigaProduct && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
             <div className="bg-gray-50 border-b p-4 flex justify-between items-center"><h3 className="font-bold text-gray-900">Variante del Sándwich</h3><button onClick={() => { setMigaOptionModal(false); setPendingMigaProduct(null); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button></div>
             <div className="p-6">
-              <p className="text-center text-gray-600 mb-6">¿Con qué acompañamiento se preparará <strong>{pendingMigaProduct.name}</strong>?</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => handleConfirmMigaOption("Con Queso")} className="py-3 px-4 bg-yellow-100 text-yellow-800 font-bold rounded-xl border border-yellow-200 hover:bg-yellow-200">Con Queso</button>
-                <button onClick={() => handleConfirmMigaOption("Con Verdura")} className="py-3 px-4 bg-green-100 text-green-800 font-bold rounded-xl border border-green-200 hover:bg-green-200">Con Verdura</button>
-                <button onClick={() => handleConfirmMigaOption("Surtido / Mixto")} className="py-3 px-4 bg-orange-100 text-orange-800 font-bold rounded-xl border border-orange-200 hover:bg-orange-200 col-span-2">Surtido (Mitad y Mitad)</button>
-                <button onClick={() => handleConfirmMigaOption("")} className="py-3 px-4 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-100 col-span-2">Sin Aclaración / Normal</button>
+              <p className="text-center text-gray-600 mb-4">¿Con qué acompañamiento se preparará <strong>{pendingMigaProduct.name}</strong>?</p>
+              
+              <div className="mb-6 bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Agregado de Huevo</h4>
+                <div className="grid grid-cols-4 gap-2">
+                  {[0, 1, 2, 3].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setEggCount(num)}
+                      className={`py-2 px-1 font-bold rounded-lg border text-sm transition-colors ${
+                        eggCount === num
+                          ? "bg-orange-500 text-white border-orange-600 shadow-sm"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      {num === 0 ? "Nada" : `${num} Huevo${num > 1 ? "s" : ""}`}
+                    </button>
+                  ))}
+                </div>
+                {eggCount > 0 && inputs.some((i) => i.name.toLowerCase().includes("huevo")) && (
+                  <p className="text-xs text-orange-600 mt-2 font-medium text-center">
+                    + ${(inputs.find((i) => i.name.toLowerCase().includes("huevo"))?.price * eggCount).toFixed(2)} al total de esta variedad
+                  </p>
+                )}
+                {eggCount > 0 && !inputs.some((i) => i.name.toLowerCase().includes("huevo")) && (
+                  <p className="text-xs text-red-500 mt-2 font-medium text-center">
+                    ⚠️ Insumo "Huevo" no encontrado en Configuración. El precio será $0.
+                  </p>
+                )}
+              </div>
+
+              {pendingMigaProduct.name.toLowerCase().includes("jamón o salame") || pendingMigaProduct.name.toLowerCase().includes("jamon o salame") ? (
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Jamón</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleConfirmMigaOption("Jamón y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
+                      <button onClick={() => handleConfirmMigaOption("Jamón y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Salame</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleConfirmMigaOption("Salame y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
+                      <button onClick={() => handleConfirmMigaOption("Salame y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
+                    </div>
+                  </div>
+                </div>
+              ) : pendingMigaProduct.name.toLowerCase().includes("bondiola / crudo") || pendingMigaProduct.name.toLowerCase().includes("bondiola o crudo") ? (
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Bondiola</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleConfirmMigaOption("Bondiola y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
+                      <button onClick={() => handleConfirmMigaOption("Bondiola y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Crudo</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleConfirmMigaOption("Crudo y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
+                      <button onClick={() => handleConfirmMigaOption("Crudo y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleConfirmMigaOption("Con Queso")} className="py-3 px-4 bg-yellow-100 text-yellow-800 font-bold rounded-xl border border-yellow-200 hover:bg-yellow-200">Con Queso</button>
+                  <button onClick={() => handleConfirmMigaOption("Con Verdura")} className="py-3 px-4 bg-green-100 text-green-800 font-bold rounded-xl border border-green-200 hover:bg-green-200">Con Verdura</button>
+                  <button onClick={() => handleConfirmMigaOption("Surtido / Mixto")} className="py-3 px-4 bg-orange-100 text-orange-800 font-bold rounded-xl border border-orange-200 hover:bg-orange-200 col-span-2">Surtido (Mitad y Mitad)</button>
+                </div>
+              )}
+
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Combinación Especial / Notas</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ej: 9 de Jamón, 3 de Salame"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500"
+                    value={customNote}
+                    onChange={(e) => setCustomNote(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && customNote.trim()) handleConfirmMigaOption(customNote.trim()); }}
+                  />
+                  <button
+                    onClick={() => customNote.trim() && handleConfirmMigaOption(customNote.trim())}
+                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    disabled={!customNote.trim()}
+                  >
+                    Agregar
+                  </button>
+                </div>
               </div>
             </div>
           </div>

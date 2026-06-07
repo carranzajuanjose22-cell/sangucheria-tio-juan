@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Package, Plus, Settings2, Save, X, Calculator, Trash2 } from "lucide-react";
+import { Package, Plus, Settings2, Save, X, Calculator, Trash2, RotateCcw } from "lucide-react";
 import { api } from "./api.js";
 
 function createMigaTemplate() {
@@ -9,8 +9,10 @@ function createMigaTemplate() {
     name: "Sándwiches de Miga",
     varieties: [
       { id: rnd(), name: "Paleta", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
-      { id: rnd(), name: "Jamón o Salame", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
-      { id: rnd(), name: "Bondiola / Crudo", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
+      { id: rnd(), name: "Jamón", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
+      { id: rnd(), name: "Salame", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
+      { id: rnd(), name: "Bondiola", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
+      { id: rnd(), name: "Crudo", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
       { id: rnd(), name: "Ternera", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
     ],
   };
@@ -61,6 +63,12 @@ export function ProductBuilder({ customInputs = [] }) {
   const handleDeleteVariety = (id) => {
     if (!product || !confirm("¿Estás seguro de que deseas eliminar esta variedad?")) return;
     setProduct({ ...product, varieties: product.varieties.filter((v) => v.id !== id) });
+  };
+
+  const handleResetTemplate = () => {
+    if (confirm("¿Estás seguro de que deseas resetear el catálogo a la plantilla por defecto? Esto borrará tus variedades actuales para cargar las nuevas.")) {
+      setProduct(createMigaTemplate());
+    }
   };
 
   const calculateRecipeCost = (recipe) =>
@@ -142,6 +150,9 @@ export function ProductBuilder({ customInputs = [] }) {
           <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Package className="text-blue-600" /> {product.name}</h2>
             <div className="flex items-center gap-3">
+              <button onClick={handleResetTemplate} className="flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-lg font-medium hover:bg-red-200">
+                <RotateCcw size={18} /> Restaurar Plantilla
+              </button>
               <button onClick={() => { setNewVarName(""); setNewVarPrices({ docena: "", media: "", plancha: "" }); setNewVarIngredients([{ insumoId: "", quantity: "" }]); setIsAddVarietyOpen(true); }} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-medium hover:bg-blue-200">
                 <Plus size={18} /> Añadir Variedad
               </button>
