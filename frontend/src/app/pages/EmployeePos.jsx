@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
-import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock } from "lucide-react";
+import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard } from "lucide-react";
 import { api } from "./api.js";
 
 export function EmployeePos() {
@@ -30,6 +30,7 @@ export function EmployeePos() {
   const [customNote, setCustomNote] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [advanceNote, setAdvanceNote] = useState("");
+  const [advanceAmount, setAdvanceAmount] = useState("");
   const [availablePayments, setAvailablePayments] = useState([]);
   const [inputs, setInputs] = useState([]);
   const [eggCount, setEggCount] = useState(0);
@@ -165,12 +166,13 @@ export function EmployeePos() {
 
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const currentSubtotal = payingOrder ? payingOrder.total : cartSubtotal;
+  const baseForSurcharge = payingOrder ? Math.max(0, payingOrder.total - (payingOrder.advanceAmount || 0)) : cartSubtotal;
   const mainMethod = availablePayments.find((p) => p.name === payments[0]?.method);
   const surchargePercent = mainMethod?.surcharge || 0;
-  const surchargeAmount = (currentSubtotal * surchargePercent) / 100;
+  const surchargeAmount = (baseForSurcharge * surchargePercent) / 100;
   const total = currentSubtotal + surchargeAmount;
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const remaining = total - totalPaid;
+  const remaining = payingOrder ? total - totalPaid - (payingOrder.advanceAmount || 0) : total - totalPaid;
 
   const updatePayment = (index, field, value) => {
     const newPayments = [...payments];
@@ -186,7 +188,8 @@ export function EmployeePos() {
       items: [...cart],
       total: cartSubtotal,
       customerName: customerName.trim(),
-      advanceNote: advanceNote.trim()
+      advanceNote: advanceNote.trim(),
+      advanceAmount: parseFloat(advanceAmount) || 0
     };
     const updated = [...pendingOrders, newOrder];
     setPendingOrders(updated);
@@ -194,6 +197,36 @@ export function EmployeePos() {
     setCart([]);
     setCustomerName("");
     setAdvanceNote("");
+    setAdvanceAmount("");
+  };
+
+  const handleDirectCharge = (keepInPrep) => {
+    if (cart.length === 0 || isRegisterClosed) return;
+    const newOrder = {
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      items: [...cart],
+      total: cartSubtotal,
+      customerName: customerName.trim(),
+      advanceNote: advanceNote.trim(),
+      advanceAmount: parseFloat(advanceAmount) || 0,
+      isDirectCharge: true,
+      keepInPrep: keepInPrep
+    };
+    setPayingOrder(newOrder);
+
+    const defaultMethod = availablePayments[0];
+    const surcharge = defaultMethod?.surcharge || 0;
+    const baseAmount = Math.max(0, newOrder.total - (newOrder.advanceAmount || 0));
+    const initialTotal = baseAmount + (baseAmount * surcharge / 100);
+    setPayments([{ method: defaultMethod?.name || "", amount: parseFloat(initialTotal.toFixed(2)) }]);
+    setModalState("payment");
+  };
+
+  const handleDeliverOrder = (id) => {
+    const updated = pendingOrders.filter(o => o.id !== id);
+    setPendingOrders(updated);
+    localStorage.setItem("pos_pending_orders", JSON.stringify(updated));
   };
 
   const handleDiscardOrder = (id) => {
@@ -208,25 +241,50 @@ export function EmployeePos() {
     setPayingOrder(order);
     const defaultMethod = availablePayments[0];
     const surcharge = defaultMethod?.surcharge || 0;
-    const initialTotal = order.total + (order.total * surcharge / 100);
+    const baseAmount = Math.max(0, order.total - (order.advanceAmount || 0));
+    const initialTotal = baseAmount + (baseAmount * surcharge / 100);
     setPayments([{ method: defaultMethod?.name || "", amount: parseFloat(initialTotal.toFixed(2)) }]);
     setModalState("payment");
   };
 
   const handleRegisterSale = () => {
     if (!payingOrder || isRegisterClosed) return;
-    if (totalPaid < total) { alert(`Falta pagar $${remaining.toFixed(2)}`); return; }
-    const paymentMethodStr = payments.length === 1 ? payments[0].method : payments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
-    const newSale = { id: payingOrder.id, date: new Date().toISOString(), items: [...payingOrder.items], total, paymentMethod: paymentMethodStr, payments: [...payments], employee: userName, registerNumber: "Caja 01" };
+    const requiredToPay = Math.max(0, total - (payingOrder.advanceAmount || 0));
+    if (totalPaid < requiredToPay) { alert(`Falta pagar $${remaining.toFixed(2)}`); return; }
+    
+    const finalPayments = [...payments];
+    if (payingOrder.advanceAmount > 0) {
+      finalPayments.unshift({ method: "Seña", amount: payingOrder.advanceAmount });
+    }
+    const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
+    const newSale = { id: payingOrder.id, date: new Date().toISOString(), items: [...payingOrder.items], total, paymentMethod: paymentMethodStr, payments: finalPayments, employee: userName, registerNumber: "Caja 01" };
     const existingSales = JSON.parse(localStorage.getItem("pos_sales") || "[]");
     const updatedSales = [...existingSales, newSale];
     localStorage.setItem("pos_sales", JSON.stringify(updatedSales));
     setSales(updatedSales);
     setLastSale(newSale);
 
-    const updatedPending = pendingOrders.filter(o => o.id !== payingOrder.id);
-    setPendingOrders(updatedPending);
-    localStorage.setItem("pos_pending_orders", JSON.stringify(updatedPending));
+    if (payingOrder.keepInPrep) {
+      const newPrepOrder = {
+        ...payingOrder,
+        isPaid: true,
+        advanceNote: payingOrder.advanceNote || "Pagado"
+      };
+      const updatedPending = [...pendingOrders, newPrepOrder];
+      setPendingOrders(updatedPending);
+      localStorage.setItem("pos_pending_orders", JSON.stringify(updatedPending));
+    } else {
+      const updatedPending = pendingOrders.filter(o => o.id !== payingOrder.id);
+      setPendingOrders(updatedPending);
+      localStorage.setItem("pos_pending_orders", JSON.stringify(updatedPending));
+    }
+
+    if (payingOrder.isDirectCharge) {
+      setCart([]);
+      setCustomerName("");
+      setAdvanceNote("");
+      setAdvanceAmount("");
+    }
 
     setModalState("success");
     setPayingOrder(null);
@@ -443,20 +501,45 @@ export function EmployeePos() {
               />
               <input
                 type="text"
-                placeholder="¿Pagado/Seña?"
-                className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-green-500 bg-white"
+                placeholder="Nota (Ej: Pagado)"
+                className="w-1/4 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-green-500 bg-white"
                 value={advanceNote}
                 onChange={(e) => setAdvanceNote(e.target.value)}
                 disabled={isRegisterClosed || cart.length === 0}
               />
+              <div className="relative w-1/4">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Seña"
+                  className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-green-500 bg-white"
+                  value={advanceAmount}
+                  onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) setAdvanceAmount(v); }}
+                  disabled={isRegisterClosed || cart.length === 0}
+                />
+              </div>
             </div>
             <div className="flex justify-between items-center mb-4">
               <span className="text-gray-900 font-medium text-lg">Total del Pedido</span>
               <span className="text-3xl font-bold text-blue-600">${cartSubtotal.toFixed(2)}</span>
             </div>
-            <button onClick={handleLoadOrder} disabled={cart.length === 0 || isRegisterClosed} className={`w-full py-3 px-4 rounded-xl font-bold text-white transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-300 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600 shadow-sm flex justify-center items-center gap-2"}`}>
-              <Clock size={18} /> Cargar Orden a Preparación
-            </button>
+            
+            <div className="flex flex-col gap-2">
+              <button onClick={() => handleDirectCharge(false)} disabled={cart.length === 0 || isRegisterClosed} className={`w-full py-3 px-4 rounded-xl font-bold text-white transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm flex justify-center items-center gap-2"}`}>
+                <Receipt size={18} /> Cobrar (Entrega Inmediata)
+              </button>
+              <div className="flex gap-2">
+                <button onClick={handleLoadOrder} disabled={cart.length === 0 || isRegisterClosed} className={`flex-1 py-2 px-2 rounded-xl font-bold transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-sm flex flex-col justify-center items-center gap-1"}`}>
+                  <Clock size={18} />
+                  <span className="text-xs text-center leading-tight">Cargar<br/>Orden</span>
+                </button>
+                <button onClick={() => handleDirectCharge(true)} disabled={cart.length === 0 || isRegisterClosed} className={`flex-1 py-2 px-2 rounded-xl font-bold text-white transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-300 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600 shadow-sm flex flex-col justify-center items-center gap-1"}`}>
+                  <CreditCard size={18} />
+                  <span className="text-xs text-center leading-tight">Cobrar y<br/>Preparar</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {isRegisterClosed && (
@@ -491,9 +574,19 @@ export function EmployeePos() {
                     {order.customerName && (
                       <p className="font-bold text-orange-600 text-sm mt-0.5">{order.customerName}</p>
                     )}
+                    {order.isPaid && (
+                      <p className="inline-block mt-1 px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded shadow-sm mr-1">
+                        ¡PAGADO!
+                      </p>
+                    )}
                     {order.advanceNote && (
-                      <p className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded border border-green-200">
+                      <p className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded border border-green-200 mr-1">
                         Nota: {order.advanceNote}
+                      </p>
+                    )}
+                    {order.advanceAmount > 0 && (
+                      <p className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-bold rounded border border-blue-200">
+                        Seña: ${order.advanceAmount}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 mt-1">{new Date(order.date).toLocaleTimeString("es-AR", {hour12: false})}</p>
@@ -508,8 +601,14 @@ export function EmployeePos() {
                   ))}
                 </ul>
                 <div className="flex gap-2 mt-auto">
-                  <button onClick={() => handleDiscardOrder(order.id)} className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50">Descartar</button>
-                  <button onClick={() => handleOpenPayment(order)} className="flex-1 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600">Cobrar y Registrar</button>
+                  {order.isPaid ? (
+                    <button onClick={() => handleDeliverOrder(order.id)} className="flex-1 bg-blue-500 text-white rounded-lg text-sm font-bold hover:bg-blue-600 py-2">Entregado / Retirar</button>
+                  ) : (
+                    <>
+                      <button onClick={() => handleDiscardOrder(order.id)} className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50">Descartar</button>
+                      <button onClick={() => handleOpenPayment(order)} className="flex-1 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600">Cobrar y Registrar</button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -639,10 +738,20 @@ export function EmployeePos() {
               <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="p-6 overflow-y-auto">
-              {payingOrder.advanceNote && (
-                <div className="mb-4 bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-2">
-                  <Tag className="text-green-600 w-5 h-5 flex-shrink-0" />
-                  <p className="text-sm font-bold text-green-800">Nota de Pago/Seña: <span className="font-medium text-green-700">{payingOrder.advanceNote}</span></p>
+              {(payingOrder.advanceNote || payingOrder.advanceAmount > 0) && (
+                <div className="mb-4 bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col gap-1">
+                  {payingOrder.advanceNote && (
+                    <div className="flex items-center gap-2">
+                      <Tag className="text-green-600 w-5 h-5 flex-shrink-0" />
+                      <p className="text-sm font-bold text-green-800">Nota: <span className="font-medium text-green-700">{payingOrder.advanceNote}</span></p>
+                    </div>
+                  )}
+                  {payingOrder.advanceAmount > 0 && (
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="text-green-600 w-5 h-5 flex-shrink-0" />
+                      <p className="text-sm font-bold text-green-800">Seña / Adelanto: <span className="font-medium text-green-700">${payingOrder.advanceAmount.toFixed(2)}</span></p>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -650,6 +759,12 @@ export function EmployeePos() {
                   <span className="text-gray-600 font-medium">Subtotal del Pedido</span>
                   <span className="text-lg font-bold text-gray-900">${payingOrder.total.toFixed(2)}</span>
                 </div>
+                {payingOrder.advanceAmount > 0 && (
+                  <div className="flex justify-between items-center text-green-600 mb-2">
+                    <span>Adelanto / Seña</span>
+                    <span className="font-bold">-${payingOrder.advanceAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 {surchargeAmount > 0 && (
                   <div className="flex justify-between items-center text-orange-600 mb-2">
                     <span>Recargo ({surchargePercent}%)</span>
@@ -658,7 +773,7 @@ export function EmployeePos() {
                 )}
                 <div className="flex justify-between items-center pt-3 border-t border-blue-200">
                   <span className="text-gray-900 font-bold">Total a Cobrar</span>
-                  <span className="text-2xl font-black text-blue-700">${total.toFixed(2)}</span>
+                  <span className="text-2xl font-black text-blue-700">${Math.max(0, total - (payingOrder.advanceAmount || 0)).toFixed(2)}</span>
                 </div>
               </div>
               <div className="mb-4">
@@ -691,7 +806,7 @@ export function EmployeePos() {
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3 shrink-0">
               <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleRegisterSale} disabled={totalPaid < total} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < total ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
+              <button onClick={handleRegisterSale} disabled={totalPaid < Math.max(0, total - (payingOrder.advanceAmount || 0))} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < Math.max(0, total - (payingOrder.advanceAmount || 0)) ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
             </div>
           </div>
         </div>
@@ -706,8 +821,8 @@ export function EmployeePos() {
               
               <div className="mb-6 bg-orange-50/50 p-4 rounded-xl border border-orange-100">
                 <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Agregado de Huevo</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  {[0, 1, 2, 3].map((num) => (
+                <div className="grid grid-cols-5 gap-2">
+                  {[0, 1, 2, 3, 4].map((num) => (
                     <button
                       key={num}
                       onClick={() => setEggCount(num)}
@@ -740,7 +855,7 @@ export function EmployeePos() {
                     <div className="grid grid-cols-2 gap-2">
                       <button onClick={() => handleConfirmMigaOption("Jamón y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
                       <button onClick={() => handleConfirmMigaOption("Jamón y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
-                    </div>
+J                    </div>
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Salame</h4>
