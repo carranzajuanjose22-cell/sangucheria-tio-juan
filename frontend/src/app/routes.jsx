@@ -10,11 +10,26 @@ import { EmployeeSales } from "./pages/EmployeeSales.jsx";
 import { Registers } from "./pages/Registers.jsx";
 import { Statistics } from "./pages/Statistics.jsx";
 
+function isTokenExpired(token) {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem("pos_token");
+  localStorage.removeItem("pos_user");
+}
+
 function RequireAuth({ children, adminOnly = false }) {
   const token = localStorage.getItem("pos_token");
   const userRaw = localStorage.getItem("pos_user");
 
-  if (!token || !userRaw) {
+  if (!token || !userRaw || isTokenExpired(token)) {
+    clearSession();
     return <Navigate to="/" replace />;
   }
 

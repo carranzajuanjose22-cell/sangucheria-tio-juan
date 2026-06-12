@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Trash2, Calendar } from "lucide-react";
+import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar } from "lucide-react";
+import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 
 export function Statistics() {
   const [registers, setRegisters] = useState([]);
+  const [currentSales, setCurrentSales] = useState([]);
   const [services, setServices] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [dateRange, setDateRange] = useState("week");
@@ -10,9 +12,8 @@ export function Statistics() {
   const [purchaseDesc, setPurchaseDesc] = useState("");
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [catalog, setCatalog] = useState(null);
-  const [inputs, setInputs] = useState([]);
 
-  useEffect(() => {
+  const loadData = () => {
     const saved = localStorage.getItem("pos_registers");
     if (saved) setRegisters(JSON.parse(saved));
     const savedServices = localStorage.getItem("pos_services");
@@ -21,11 +22,20 @@ export function Statistics() {
     if (savedPurchases) setPurchases(JSON.parse(savedPurchases));
     const savedCatalog = localStorage.getItem("pos_miga_product");
     if (savedCatalog) setCatalog(JSON.parse(savedCatalog));
-    const savedInputs = localStorage.getItem("pos_inputs");
-    if (savedInputs) setInputs(JSON.parse(savedInputs));
+    const savedCurrentSales = localStorage.getItem("pos_sales");
+    setCurrentSales(savedCurrentSales ? JSON.parse(savedCurrentSales) : []);
+  };
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
+  const todayStr = () => new Date().toLocaleDateString("es-AR");
+
   const getFilteredRegisters = () => {
+    if (dateRange === "today") return registers.filter((r) => new Date(r.date).toLocaleDateString("es-AR") === todayStr());
     const now = new Date();
     const cutoff = new Date();
     if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
@@ -35,9 +45,24 @@ export function Statistics() {
   };
 
   const filteredRegisters = getFilteredRegisters();
-  const filteredSales = filteredRegisters.flatMap((r) => r.sales || []);
+
+  const getFilteredCurrentSales = () => {
+    if (dateRange === "today") return currentSales.filter((s) => new Date(s.date).toLocaleDateString("es-AR") === todayStr());
+    if (dateRange === "all") return currentSales;
+    const now = new Date();
+    const cutoff = new Date();
+    if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
+    else cutoff.setDate(now.getDate() - 30);
+    return currentSales.filter((s) => new Date(s.date) >= cutoff);
+  };
+
+  const filteredSales = [
+    ...filteredRegisters.flatMap((r) => r.sales || []),
+    ...getFilteredCurrentSales(),
+  ];
 
   const getFilteredPurchases = () => {
+    if (dateRange === "today") return purchases.filter((p) => new Date(p.date).toLocaleDateString("es-AR") === todayStr());
     const now = new Date();
     const cutoff = new Date();
     if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
@@ -49,9 +74,22 @@ export function Statistics() {
   const filteredPurchases = getFilteredPurchases();
   const totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.amount, 0);
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-  const totalVariableExpenses = filteredRegisters.reduce((sum, r) => sum + (r.totalExpenses || 0), 0);
+  const currentExpenses = (() => {
+    try { return JSON.parse(localStorage.getItem("pos_expenses") || "[]"); } catch { return []; }
+  })();
+  const filteredCurrentExpenses = (() => {
+    if (dateRange === "today") return currentExpenses.filter((e) => new Date(e.date).toLocaleDateString("es-AR") === todayStr());
+    if (dateRange === "all") return currentExpenses;
+    const cutoff = new Date();
+    if (dateRange === "week") cutoff.setDate(cutoff.getDate() - 7);
+    else cutoff.setDate(cutoff.getDate() - 30);
+    return currentExpenses.filter((e) => new Date(e.date) >= cutoff);
+  })();
+  const totalVariableExpenses =
+    filteredRegisters.reduce((sum, r) => sum + (r.totalExpenses || 0), 0) +
+    filteredCurrentExpenses.reduce((sum, e) => sum + e.amount, 0);
   const monthlyFixedExpenses = services.reduce((sum, s) => sum + (s.cost || 0), 0);
-  let daysToCalculate = dateRange === "week" ? 7 : dateRange === "all" ? Math.max(new Set(registers.map((r) => new Date(r.date).toLocaleDateString("es-AR"))).size, 1) : 30;
+  let daysToCalculate = dateRange === "today" ? 1 : dateRange === "week" ? 7 : dateRange === "all" ? Math.max(new Set(registers.map((r) => new Date(r.date).toLocaleDateString("es-AR"))).size, 1) : 30;
   const totalFixedExpenses = (monthlyFixedExpenses / 30) * daysToCalculate;
   const netBalance = totalRevenue - totalVariableExpenses - totalFixedExpenses - totalPurchases;
   const productsSold = filteredSales.reduce((sum, sale) => sum + sale.items.reduce((s2, item) => s2 + item.quantity, 0), 0);
@@ -66,30 +104,27 @@ export function Statistics() {
     }
   });
 
-  let totalPanDeMiga = 0;
-  const panInput = inputs.find((i) => i.name.toLowerCase().includes("miga") && i.name.toLowerCase().includes("pan"));
+  let totalDocenas = 0;
   filteredSales.forEach((sale) => {
     sale.items.forEach((item) => {
       let matched = false;
-      if (catalog && panInput) {
+      if (catalog) {
         const baseId = item.id.split("-")[0];
         catalog.varieties?.forEach((v) => {
           const pres = v.presentations.find((p) => p.id === baseId);
-          if (pres) {
-            const ri = pres.recipe.find((r) => r.insumoId === panInput.id);
-            if (ri) { totalPanDeMiga += ri.quantity * item.quantity; matched = true; }
+          if (pres && pres.name.toLowerCase() === "docena") {
+            totalDocenas += item.quantity;
+            matched = true;
           }
         });
       }
       if (!matched) {
         const n = item.name.toLowerCase();
-        if (n.includes("docena") && !n.includes("media")) totalPanDeMiga += 12 * item.quantity;
-        else if (n.includes("media docena")) totalPanDeMiga += 6 * item.quantity;
-        else if (n.includes("plancha")) totalPanDeMiga += 3 * item.quantity;
+        if (n.includes("docena") && !n.includes("media")) totalDocenas += item.quantity;
       }
     });
   });
-  const tachosMayonesa = Math.floor(totalPanDeMiga / 18);
+  const tachosMayonesa = Math.floor(totalDocenas / 3);
 
   const productStats = {};
   filteredSales.forEach((sale) => {
@@ -113,8 +148,8 @@ export function Statistics() {
   const employeeHoursArray = Object.entries(employeeHoursStats).map(([name, stats]) => ({ name, ...stats })).sort((a, b) => b.hours - a.hours);
 
   const handleRegisterPurchase = () => {
-    const amount = parseFloat(purchaseAmount);
-    if (!purchaseDesc.trim() || isNaN(amount) || amount <= 0) { alert("Por favor ingresa una etiqueta y un monto válido"); return; }
+    const amount = nonNegative(purchaseAmount);
+    if (!purchaseDesc.trim() || amount <= 0) { alert("Por favor ingresa una etiqueta y un monto válido"); return; }
     const newPurchase = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), description: purchaseDesc.trim(), amount };
     const updated = [...purchases, newPurchase];
     localStorage.setItem("pos_purchases", JSON.stringify(updated));
@@ -122,17 +157,9 @@ export function Statistics() {
     setPurchaseDesc(""); setPurchaseAmount(""); setIsModalOpen(false);
   };
 
-  const handleDeletePurchase = (id) => {
-    if (confirm("¿Estás seguro de que deseas eliminar este registro?")) {
-      const updated = purchases.filter((p) => p.id !== id);
-      localStorage.setItem("pos_purchases", JSON.stringify(updated));
-      setPurchases(updated);
-    }
-  };
-
   const formatHours = (h) => `${Math.floor(h)}h ${Math.round((h - Math.floor(h)) * 60).toString().padStart(2, "0")}m`;
 
-  const rangeButtons = [{ id: "week", label: "Última Semana" }, { id: "month", label: "Último Mes" }, { id: "all", label: "Todo" }];
+  const rangeButtons = [{ id: "today", label: "Hoy" }, { id: "week", label: "Última Semana" }, { id: "month", label: "Último Mes" }, { id: "all", label: "Todo" }];
 
   return (
     <div className="space-y-6">
@@ -162,7 +189,7 @@ export function Statistics() {
               <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center`}><Icon className={`w-5 h-5 ${color}`} /></div>
             </div>
             <p className={`text-3xl font-bold ${special ? "text-yellow-900" : "text-gray-900"}`}>{value}</p>
-            {special && <p className="text-xs text-yellow-700 mt-2">Cada 18 u. de pan de miga</p>}
+            {special && <p className="text-xs text-yellow-700 mt-2">1 tacho cada 3 docenas vendidas</p>}
           </div>
         ))}
       </div>
@@ -175,7 +202,7 @@ export function Statistics() {
               <ShoppingCart size={16} /> Ingresar Compra
             </button>
             <span className="text-sm font-medium text-gray-500 bg-white px-3 py-1.5 border border-gray-200 rounded-lg">
-              {dateRange === "week" ? "Período: Últimos 7 días" : dateRange === "month" ? "Período: Últimos 30 días" : `Período: Histórico (${daysToCalculate} días)`}
+              {dateRange === "today" ? "Período: Hoy" : dateRange === "week" ? "Período: Últimos 7 días" : dateRange === "month" ? "Período: Últimos 30 días" : `Período: Histórico (${daysToCalculate} días)`}
             </span>
           </div>
         </div>
@@ -281,7 +308,6 @@ export function Statistics() {
                   <th className="px-6 py-3 text-sm font-semibold text-gray-600">Fecha</th>
                   <th className="px-6 py-3 text-sm font-semibold text-gray-600">Descripción</th>
                   <th className="px-6 py-3 text-sm font-semibold text-gray-600 text-right">Monto</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-gray-600 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -292,11 +318,6 @@ export function Statistics() {
                     </td>
                     <td className="px-6 py-3"><span className="font-medium text-gray-900">{purchase.description}</span></td>
                     <td className="px-6 py-3 text-right"><span className="font-bold text-red-600">-${purchase.amount.toFixed(2)}</span></td>
-                    <td className="px-6 py-3 text-center">
-                      <button onClick={() => handleDeletePurchase(purchase.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -321,7 +342,7 @@ export function Statistics() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Monto del Gasto</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
-                  <input type="text" inputMode="decimal" value={purchaseAmount} onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) setPurchaseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="0.00" />
+                  <input type="text" inputMode="decimal" value={purchaseAmount} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setPurchaseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="0.00" />
                 </div>
               </div>
             </div>

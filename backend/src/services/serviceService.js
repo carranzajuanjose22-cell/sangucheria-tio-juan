@@ -3,6 +3,7 @@
 const { db } = require('../db');
 const { services } = require('../models/schema');
 const { eq } = require('drizzle-orm');
+const { assertNonNegative } = require('../utils/numbers');
 
 function newId() {
   return crypto.randomUUID();
@@ -13,6 +14,7 @@ async function getAllServices() {
 }
 
 async function createService(data) {
+  assertNonNegative(data.cost, 'El costo');
   const [service] = await db
     .insert(services)
     .values({ ...data, id: newId() })
@@ -21,6 +23,7 @@ async function createService(data) {
 }
 
 async function updateService(id, data) {
+  if (data.cost !== undefined) assertNonNegative(data.cost, 'El costo');
   const [service] = await db
     .update(services)
     .set(data)

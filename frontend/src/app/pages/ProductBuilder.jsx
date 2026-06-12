@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Package, Plus, Settings2, Save, X, Calculator, Trash2, RotateCcw } from "lucide-react";
+import { Package, Plus, Settings2, Save, X, Calculator, Trash2, RotateCcw, Pencil, Check } from "lucide-react";
 import { api } from "./api.js";
+import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
 
 function createMigaTemplate() {
   const rnd = () => Math.random().toString(36).substr(2, 9);
@@ -8,12 +9,12 @@ function createMigaTemplate() {
     id: rnd(),
     name: "Sándwiches de Miga",
     varieties: [
-      { id: rnd(), name: "Paleta", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
-      { id: rnd(), name: "Jamón", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
-      { id: rnd(), name: "Salame", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
-      { id: rnd(), name: "Bondiola", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
-      { id: rnd(), name: "Crudo", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
-      { id: rnd(), name: "Ternera", presentations: [{ id: rnd(), name: "Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, stock: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, stock: 0, recipe: [] }] },
+      { id: rnd(), name: "Paleta", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
+      { id: rnd(), name: "Jamón", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
+      { id: rnd(), name: "Salame", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
+      { id: rnd(), name: "Bondiola", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
+      { id: rnd(), name: "Crudo", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
+      { id: rnd(), name: "Ternera", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
     ],
   };
 }
@@ -31,6 +32,7 @@ export function ProductBuilder({ customInputs = [] }) {
   const [tempRecipe, setTempRecipe] = useState([]);
   const [selectedInsumo, setSelectedInsumo] = useState("");
   const [insumoQuantity, setInsumoQuantity] = useState("");
+  const [editingPrice, setEditingPrice] = useState(null); // { varId, presId, value }
   const [isAddVarietyOpen, setIsAddVarietyOpen] = useState(false);
   const [newVarName, setNewVarName] = useState("");
   const [newVarPrices, setNewVarPrices] = useState({ docena: "", media: "", plancha: "" });
@@ -83,8 +85,8 @@ export function ProductBuilder({ customInputs = [] }) {
   };
 
   const addInsumoToRecipe = () => {
-    const qty = parseFloat(insumoQuantity);
-    if (!selectedInsumo || isNaN(qty) || qty <= 0) return;
+    const qty = nonNegative(insumoQuantity);
+    if (!selectedInsumo || qty <= 0) return;
     const existingIndex = tempRecipe.findIndex((r) => r.insumoId === selectedInsumo);
     if (existingIndex >= 0) {
       const newRecipe = [...tempRecipe];
@@ -108,36 +110,52 @@ export function ProductBuilder({ customInputs = [] }) {
 
   const updatePresentationField = (varId, presId, field, value) => {
     if (!product) return;
+    const safeValue = typeof value === "number" ? nonNegative(value) : value;
     const updatedVarieties = product.varieties.map((v) => {
       if (v.id !== varId) return v;
-      return { ...v, presentations: v.presentations.map((p) => p.id === presId ? { ...p, [field]: value } : p) };
+      return { ...v, presentations: v.presentations.map((p) => p.id === presId ? { ...p, [field]: safeValue } : p) };
     });
     setProduct({ ...product, varieties: updatedVarieties });
   };
 
+  const startEditPrice = (varId, presId, currentPrice) => {
+    setEditingPrice({ varId, presId, value: currentPrice > 0 ? String(currentPrice) : "" });
+  };
+
+  const confirmEditPrice = () => {
+    if (!editingPrice) return;
+    updatePresentationField(editingPrice.varId, editingPrice.presId, "price", nonNegative(editingPrice.value));
+    setEditingPrice(null);
+  };
+
+  const cancelEditPrice = () => setEditingPrice(null);
+
+  const isEditing = (varId, presId) =>
+    editingPrice?.varId === varId && editingPrice?.presId === presId;
+
   const getRowCost = (insumoId, qtyStr) => {
     const insumo = availableInsumos.find((i) => i.id === insumoId);
-    const qty = parseFloat(qtyStr);
-    if (!insumo || isNaN(qty)) return 0;
+    const qty = nonNegative(qtyStr);
+    if (!insumo) return 0;
     return insumo.costPerUnit * qty;
   };
 
   const handleSaveNewVariety = () => {
     if (!product || !newVarName.trim()) { alert("Por favor, ingresa el nombre de la variedad."); return; }
-    const recipe = newVarIngredients.filter((ing) => ing.insumoId && parseFloat(ing.quantity) > 0).map((ing) => ({ insumoId: ing.insumoId, quantity: parseFloat(ing.quantity) }));
+    const recipe = newVarIngredients.filter((ing) => ing.insumoId && nonNegative(ing.quantity) > 0).map((ing) => ({ insumoId: ing.insumoId, quantity: nonNegative(ing.quantity) }));
     const rnd = () => Math.random().toString(36).substr(2, 9);
     const templatePresentations = product.varieties.length > 0
       ? product.varieties[0].presentations.map((p) => {
           let price = 0;
-          if (p.name === "Docena") price = parseFloat(newVarPrices.docena) || 0;
-          else if (p.name === "Media Docena") price = parseFloat(newVarPrices.media) || 0;
-          else if (p.name === "Plancha de 3") price = parseFloat(newVarPrices.plancha) || 0;
-          return { id: rnd(), name: p.name, price, stock: 0, recipe: [...recipe] };
+          if (p.name === "Docena") price = nonNegative(newVarPrices.docena);
+          else if (p.name === "Media Docena") price = nonNegative(newVarPrices.media);
+          else if (p.name === "Plancha de 3") price = nonNegative(newVarPrices.plancha);
+          return { id: rnd(), name: p.name, price, recipe: [...recipe] };
         })
       : [
-          { id: rnd(), name: "Docena", price: parseFloat(newVarPrices.docena) || 0, stock: 0, recipe: [...recipe] },
-          { id: rnd(), name: "Media Docena", price: parseFloat(newVarPrices.media) || 0, stock: 0, recipe: [...recipe] },
-          { id: rnd(), name: "Plancha de 3", price: parseFloat(newVarPrices.plancha) || 0, stock: 0, recipe: [...recipe] },
+          { id: rnd(), name: "Docena", price: nonNegative(newVarPrices.docena), recipe: [...recipe] },
+          { id: rnd(), name: "Media Docena", price: nonNegative(newVarPrices.media), recipe: [...recipe] },
+          { id: rnd(), name: "Plancha de 3", price: nonNegative(newVarPrices.plancha), recipe: [...recipe] },
         ];
     setProduct({ ...product, varieties: [...product.varieties, { id: rnd(), name: newVarName.trim(), presentations: templatePresentations }] });
     setIsAddVarietyOpen(false);
@@ -174,9 +192,9 @@ export function ProductBuilder({ customInputs = [] }) {
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-4 py-3 text-sm font-semibold text-gray-600">Presentación</th>
-                        <th className="px-4 py-3 text-sm font-semibold text-gray-600 w-32">Precio ($)</th>
-                        <th className="px-4 py-3 text-sm font-semibold text-gray-600 w-32">Stock</th>
+                        <th className="px-4 py-3 text-sm font-semibold text-gray-600 w-40">Precio ($)</th>
                         <th className="px-4 py-3 text-sm font-semibold text-gray-600">Costo Calculado</th>
+                        <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center w-28">Acciones</th>
                         <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-right">Insumos (Receta)</th>
                       </tr>
                     </thead>
@@ -184,20 +202,48 @@ export function ProductBuilder({ customInputs = [] }) {
                       {variety.presentations.map((pres) => {
                         const cost = calculateRecipeCost(pres.recipe);
                         const margin = pres.price > 0 ? ((pres.price - cost) / pres.price) * 100 : 0;
+                        const editing = isEditing(variety.id, pres.id);
                         return (
                           <tr key={pres.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 font-medium text-gray-900">{pres.name}</td>
                             <td className="px-4 py-3">
-                              <input type="number" value={pres.price || ""} onChange={(e) => updatePresentationField(variety.id, pres.id, "price", parseFloat(e.target.value) || 0)} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00" />
-                            </td>
-                            <td className="px-4 py-3">
-                              <input type="number" value={pres.stock || ""} onChange={(e) => updatePresentationField(variety.id, pres.id, "stock", parseInt(e.target.value) || 0)} className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0" />
+                              {editing ? (
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={editingPrice.value}
+                                  onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setEditingPrice({ ...editingPrice, value: e.target.value }); }}
+                                  onKeyDown={(e) => { if (e.key === "Enter") confirmEditPrice(); if (e.key === "Escape") cancelEditPrice(); }}
+                                  className="w-full px-3 py-1.5 border border-blue-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                  placeholder="0.00"
+                                />
+                              ) : (
+                                <span className="font-semibold text-gray-800">${pres.price.toFixed(2)}</span>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex flex-col">
                                 <span className="font-bold text-gray-900">${cost.toFixed(2)}</span>
                                 {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 40 ? "text-green-600" : "text-red-500"}`}>Margen: {margin.toFixed(1)}%</span>}
                               </div>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {editing ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <button onClick={confirmEditPrice} title="Guardar" className="p-1.5 text-white bg-green-500 hover:bg-green-600 rounded-lg">
+                                    <Check size={15} />
+                                  </button>
+                                  <button onClick={cancelEditPrice} title="Cancelar" className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                    <X size={15} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => startEditPrice(variety.id, pres.id, pres.price)} title="Editar precio" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                  <Pencil size={15} />
+                                </button>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right">
                               <button onClick={() => openRecipeModal(variety.id, pres)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">
@@ -235,7 +281,7 @@ export function ProductBuilder({ customInputs = [] }) {
                     {availableInsumos.map((insumo) => <option key={insumo.id} value={insumo.id}>{insumo.name} (${insumo.costPerUnit} x {insumo.unitMeasure})</option>)}
                   </select>
                   <div className="w-24">
-                    <input type="number" placeholder="Cant." value={insumoQuantity} onChange={(e) => setInsumoQuantity(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    <input type="number" min="0" step="any" placeholder="Cant." value={insumoQuantity} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setInsumoQuantity(e.target.value); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
                   </div>
                   <button onClick={addInsumoToRecipe} className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"><Plus size={20} /></button>
                 </div>
@@ -294,7 +340,7 @@ export function ProductBuilder({ customInputs = [] }) {
                   {[{ key: "docena", label: "Docena" }, { key: "media", label: "Media Docena" }, { key: "plancha", label: "Plancha de 3" }].map(({ key, label }) => (
                     <div key={key}>
                       <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
-                      <input type="number" placeholder="0.00" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500" value={newVarPrices[key]} onChange={(e) => setNewVarPrices({ ...newVarPrices, [key]: e.target.value })} />
+                      <input type="number" min="0" step="0.01" placeholder="0.00" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500" value={newVarPrices[key]} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setNewVarPrices({ ...newVarPrices, [key]: e.target.value }); }} />
                     </div>
                   ))}
                 </div>
@@ -316,7 +362,7 @@ export function ProductBuilder({ customInputs = [] }) {
                         </select>
                       </div>
                       <div className="w-24">
-                        <input type="number" placeholder="Cant." className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500" value={ing.quantity} onChange={(e) => { const newIngs = [...newVarIngredients]; newIngs[idx].quantity = e.target.value; setNewVarIngredients(newIngs); }} />
+                        <input type="number" min="0" step="any" placeholder="Cant." className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500" value={ing.quantity} onChange={(e) => { if (!isAllowedNumberInput(e.target.value)) return; const newIngs = [...newVarIngredients]; newIngs[idx].quantity = e.target.value; setNewVarIngredients(newIngs); }} />
                       </div>
                       <div className="w-20 h-[34px] mt-1 flex items-center justify-center px-1 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 font-medium">
                         ${getRowCost(ing.insumoId, ing.quantity).toFixed(2)}

@@ -12,15 +12,19 @@ function getAuthHeaders() {
   };
 }
 
+function handleSessionExpired() {
+  localStorage.removeItem("pos_token");
+  localStorage.removeItem("pos_user");
+  window.location.href = "/";
+}
+
 export const api = {
   get: async (endpoint) => {
     const response = await fetch(`${API_URL}${endpoint}`, {
       headers: getAuthHeaders(),
     });
     if (response.status === 401) {
-      localStorage.removeItem("pos_token");
-      localStorage.removeItem("pos_user");
-      window.location.href = "/";
+      handleSessionExpired();
       throw new Error("Sesión expirada");
     }
     if (!response.ok) {
@@ -37,9 +41,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (response.status === 401 && endpoint !== "/auth/login") {
-      localStorage.removeItem("pos_token");
-      localStorage.removeItem("pos_user");
-      window.location.href = "/";
+      handleSessionExpired();
       throw new Error("Sesión expirada");
     }
     if (!response.ok) {
@@ -56,9 +58,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (response.status === 401) {
-      localStorage.removeItem("pos_token");
-      localStorage.removeItem("pos_user");
-      window.location.href = "/";
+      handleSessionExpired();
       throw new Error("Sesión expirada");
     }
     if (!response.ok) {
@@ -74,9 +74,7 @@ export const api = {
       headers: getAuthHeaders(),
     });
     if (response.status === 401) {
-      localStorage.removeItem("pos_token");
-      localStorage.removeItem("pos_user");
-      window.location.href = "/";
+      handleSessionExpired();
       throw new Error("Sesión expirada");
     }
     if (!response.ok) {

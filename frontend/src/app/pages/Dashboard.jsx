@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Receipt, ShoppingCart, Clock, Lock, Unlock, X, CheckCircle2, Eye } from "lucide-react";
+import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 
 export function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -61,11 +62,7 @@ export function Dashboard() {
   }, []);
 
   const handleOpenRegister = () => {
-    const cashAmount = parseFloat(initialCashInput);
-    if (isNaN(cashAmount) || cashAmount < 0) {
-      alert("Por favor ingresa un monto válido");
-      return;
-    }
+    const cashAmount = nonNegative(initialCashInput);
     const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: "Admin" };
     localStorage.setItem("register_state", JSON.stringify(newState));
     setRegisterState(newState);
@@ -248,7 +245,7 @@ export function Dashboard() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Monto Inicial</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
-                  <input type="text" inputMode="decimal" value={initialCashInput} onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) setInitialCashInput(v); }} className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-lg font-medium" placeholder="0.00" autoFocus />
+                  <input type="text" inputMode="decimal" value={initialCashInput} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setInitialCashInput(v); }} className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-lg font-medium" placeholder="0.00" autoFocus />
                 </div>
               </div>
             </div>

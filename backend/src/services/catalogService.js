@@ -3,6 +3,7 @@
 const { db } = require('../db');
 const { catalog } = require('../models/schema');
 const { eq } = require('drizzle-orm');
+const { validateCatalogData } = require('../utils/numbers');
 
 function newId() {
   return crypto.randomUUID();
@@ -14,6 +15,7 @@ async function getCatalogByType(type) {
 }
 
 async function upsertCatalog(type, data) {
+  validateCatalogData(data);
   const existing = await getCatalogByType(type);
   const dataString = JSON.stringify(data);
 

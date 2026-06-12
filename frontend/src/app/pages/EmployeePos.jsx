@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
 import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard } from "lucide-react";
 import { api } from "./api.js";
+import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 
 export function EmployeePos() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
-  const userName = isAdmin ? "Admin" : "Empleado #1";
+  const userName = isAdmin ? "Admin" : "Colaborador #1";
 
   const [searchTerm, setSearchTerm] = useState("");
   const [cart, setCart] = useState([]);
@@ -161,7 +162,8 @@ export function EmployeePos() {
   };
 
   const setQuantity = (id, quantity) => {
-    setCart((current) => current.map((item) => item.id === id ? { ...item, quantity: quantity > 0 ? quantity : 1 } : item));
+    const safeQty = Math.max(1, nonNegative(quantity));
+    setCart((current) => current.map((item) => item.id === id ? { ...item, quantity: safeQty } : item));
   };
 
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -176,7 +178,8 @@ export function EmployeePos() {
 
   const updatePayment = (index, field, value) => {
     const newPayments = [...payments];
-    newPayments[index] = { ...newPayments[index], [field]: value };
+    const safeValue = field === "amount" ? nonNegative(value) : value;
+    newPayments[index] = { ...newPayments[index], [field]: safeValue };
     setPayments(newPayments);
   };
 
@@ -189,7 +192,7 @@ export function EmployeePos() {
       total: cartSubtotal,
       customerName: customerName.trim(),
       advanceNote: advanceNote.trim(),
-      advanceAmount: parseFloat(advanceAmount) || 0
+      advanceAmount: nonNegative(advanceAmount)
     };
     const updated = [...pendingOrders, newOrder];
     setPendingOrders(updated);
@@ -209,7 +212,7 @@ export function EmployeePos() {
       total: cartSubtotal,
       customerName: customerName.trim(),
       advanceNote: advanceNote.trim(),
-      advanceAmount: parseFloat(advanceAmount) || 0,
+      advanceAmount: nonNegative(advanceAmount),
       isDirectCharge: true,
       keepInPrep: keepInPrep
     };
@@ -292,8 +295,7 @@ export function EmployeePos() {
   };
 
   const handleOpenRegister = () => {
-    const cashAmount = parseFloat(initialCashInput);
-    if (isNaN(cashAmount) || cashAmount < 0) { alert("Por favor ingresa un monto válido"); return; }
+    const cashAmount = nonNegative(initialCashInput);
     const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
     localStorage.setItem("register_state", JSON.stringify(newState));
     setRegisterState(newState);
@@ -302,8 +304,8 @@ export function EmployeePos() {
   };
 
   const handleRegisterExpense = () => {
-    const amount = parseFloat(expenseAmount);
-    if (!expenseDesc.trim() || isNaN(amount) || amount <= 0) { alert("Por favor ingresa una descripción y un monto válido"); return; }
+    const amount = nonNegative(expenseAmount);
+    if (!expenseDesc.trim() || amount <= 0) { alert("Por favor ingresa una descripción y un monto válido"); return; }
     const newExpense = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), description: expenseDesc.trim(), amount, employee: userName };
     const existingExpenses = JSON.parse(localStorage.getItem("pos_expenses") || "[]");
     const updatedExpenses = [...existingExpenses, newExpense];
@@ -479,7 +481,7 @@ export function EmployeePos() {
                       <span className="text-gray-600 font-medium">${item.price}</span>
                       <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
                         <button onClick={() => updateQuantity(item.id, -1)} className="px-2 py-1 hover:bg-gray-100 text-gray-600"><Minus className="w-4 h-4" /></button>
-                        <input type="number" min="1" value={item.quantity} onChange={(e) => setQuantity(item.id, parseInt(e.target.value) || 1)} className="w-12 text-center font-medium text-sm border-0 focus:ring-0 focus:outline-none" />
+                        <input type="number" min="1" value={item.quantity} onChange={(e) => { const qty = parseInt(e.target.value, 10); if (e.target.value !== "" && (Number.isNaN(qty) || qty < 0)) return; setQuantity(item.id, qty || 1); }} className="w-12 text-center font-medium text-sm border-0 focus:ring-0 focus:outline-none" />
                         <button onClick={() => updateQuantity(item.id, 1)} className="px-2 py-1 hover:bg-gray-100 text-gray-600"><Plus className="w-4 h-4" /></button>
                       </div>
                     </div>
@@ -515,7 +517,7 @@ export function EmployeePos() {
                   placeholder="Seña"
                   className="w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-green-500 bg-white"
                   value={advanceAmount}
-                  onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) setAdvanceAmount(v); }}
+                  onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setAdvanceAmount(v); }}
                   disabled={isRegisterClosed || cart.length === 0}
                 />
               </div>
@@ -622,7 +624,7 @@ export function EmployeePos() {
             <div className="bg-gray-50 border-b p-4 flex justify-between items-center"><h3 className="font-bold text-gray-900">Abrir Caja</h3><button onClick={() => { setModalState("none"); setInitialCashInput(""); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button></div>
             <div className="p-6">
               <div className="flex flex-col items-center mb-6"><div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3"><Unlock size={32} /></div><h4 className="text-xl font-bold text-gray-900 mb-2">Apertura de Caja</h4><p className="text-gray-600 text-center">Ingresa el monto inicial en efectivo.</p></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">Monto Inicial</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span><input type="text" inputMode="decimal" value={initialCashInput} onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) setInitialCashInput(v); }} className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-lg font-medium" placeholder="0.00" autoFocus /></div></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Monto Inicial</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span><input type="text" inputMode="decimal" value={initialCashInput} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setInitialCashInput(v); }} className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-lg font-medium" placeholder="0.00" autoFocus /></div></div>
             </div>
             <div className="p-4 border-t bg-gray-50 flex gap-3"><button onClick={() => { setModalState("none"); setInitialCashInput(""); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button><button onClick={handleOpenRegister} className="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700">Abrir Caja</button></div>
           </div>
@@ -635,7 +637,7 @@ export function EmployeePos() {
             <div className="bg-gray-50 border-b p-4 flex justify-between items-center"><h3 className="font-bold text-gray-900">Registrar Compra / Gasto</h3><button onClick={() => { setModalState("none"); setExpenseDesc(""); setExpenseAmount(""); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button></div>
             <div className="p-6 space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label><input type="text" value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="Descripción del gasto" autoFocus /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Monto Retirado de Caja</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span><input type="text" inputMode="decimal" value={expenseAmount} onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) setExpenseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="0.00" /></div></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Monto Retirado de Caja</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span><input type="text" inputMode="decimal" value={expenseAmount} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setExpenseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="0.00" /></div></div>
             </div>
             <div className="p-4 border-t bg-gray-50 flex gap-3"><button onClick={() => { setModalState("none"); setExpenseDesc(""); setExpenseAmount(""); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button><button onClick={handleRegisterExpense} className="flex-1 bg-orange-500 text-white py-2.5 rounded-lg font-medium hover:bg-orange-600">Registrar Gasto</button></div>
           </div>
@@ -779,23 +781,33 @@ export function EmployeePos() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-gray-700">Formas de Pago</label>
-                  <button onClick={() => setPayments([...payments, { method: availablePayments[0]?.name || "", amount: 0 }])} className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
-                    <Plus className="w-3 h-3" /> Agregar
-                  </button>
+                  {(() => {
+                    const usedMethods = payments.map((p) => p.method);
+                    const nextMethod = availablePayments.find((p) => !usedMethods.includes(p.name));
+                    return nextMethod ? (
+                      <button onClick={() => setPayments([...payments, { method: nextMethod.name, amount: 0 }])} className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        <Plus className="w-3 h-3" /> Agregar
+                      </button>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="space-y-2">
-                  {payments.map((payment, index) => (
+                  {payments.map((payment, index) => {
+                    const otherMethods = payments.filter((_, i) => i !== index).map((p) => p.method);
+                    const options = availablePayments.filter((p) => !otherMethods.includes(p.name));
+                    return (
                     <div key={index} className="flex gap-2 items-center">
                       <select value={payment.method} onChange={(e) => updatePayment(index, "method", e.target.value)} className="flex-1 border-gray-300 rounded-lg py-2 px-3 border bg-white text-sm">
-                        {availablePayments.map((p) => <option key={p.id} value={p.name}>{p.name} {p.surcharge > 0 ? `(+${p.surcharge}%)` : ""}</option>)}
+                        {options.map((p) => <option key={p.id} value={p.name}>{p.name} {p.surcharge > 0 ? `(+${p.surcharge}%)` : ""}</option>)}
                       </select>
                       <div className="relative flex-1">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-                        <input type="text" inputMode="decimal" value={payment.amount || ""} onChange={(e) => { const v = e.target.value; if (v === "" || /^\d*\.?\d*$/.test(v)) updatePayment(index, "amount", v === "" ? 0 : parseFloat(v)); }} className="w-full pl-5 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+                        <input type="text" inputMode="decimal" value={payment.amount || ""} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) updatePayment(index, "amount", v === "" ? 0 : v); }} className="w-full pl-5 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                       </div>
                       {payments.length > 1 && <button onClick={() => setPayments(payments.filter((_, i) => i !== index))} className="p-2 text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button>}
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
                 <div className="mt-4 pt-3 border-t border-gray-200 space-y-1">
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Total ingresado:</span><span className="font-medium text-gray-900">${totalPaid.toFixed(2)}</span></div>

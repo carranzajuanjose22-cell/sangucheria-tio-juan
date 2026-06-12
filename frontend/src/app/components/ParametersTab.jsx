@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, X, Edit2, Trash2 } from "lucide-react";
 import { ProductBuilder } from "../pages/ProductBuilder.jsx";
 import { api } from "../pages/api.js";
+import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
 
 export function ParametersTab() {
   const [services, setServices] = useState([]);
@@ -305,7 +306,7 @@ function ServiceModal({ onClose, onSave, initialData }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave({ name, cost: Number(cost) });
+          onSave({ name, cost: nonNegative(cost) });
         }}
         className="space-y-4"
       >
@@ -315,7 +316,7 @@ function ServiceModal({ onClose, onSave, initialData }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Costo</label>
-          <input required type="number" step="0.01" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={cost} onChange={(e) => setCost(e.target.value)} />
+          <input required type="number" step="0.01" min="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={cost} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setCost(e.target.value); }} />
         </div>
         <div className="pt-4 flex justify-end">
           <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
@@ -336,7 +337,7 @@ function PaymentModal({ onClose, onSave, initialData }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave({ name, surcharge: Number(surcharge) });
+          onSave({ name, surcharge: nonNegative(surcharge) });
         }}
         className="space-y-4"
       >
@@ -346,7 +347,7 @@ function PaymentModal({ onClose, onSave, initialData }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Recargo (%)</label>
-          <input required type="number" step="0.01" min="0" max="100" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={surcharge} onChange={(e) => setSurcharge(e.target.value)} />
+          <input required type="number" step="0.01" min="0" max="100" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={surcharge} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setSurcharge(e.target.value); }} />
           <p className="mt-1 text-xs text-gray-500">Ingresa 0 si no hay recargo.</p>
         </div>
         <div className="pt-4 flex justify-end">
@@ -369,7 +370,7 @@ function InputModal({ onClose, onSave, initialData }) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave({ name, isFood, price: Number(price) });
+          onSave({ name, isFood, price: nonNegative(price) });
         }}
         className="space-y-4"
       >
@@ -385,7 +386,7 @@ function InputModal({ onClose, onSave, initialData }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">{isFood ? "Precio por Kg" : "Precio por Unidad"}</label>
-          <input required type="number" step="0.01" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <input required type="number" step="0.01" min="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={price} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setPrice(e.target.value); }} />
         </div>
         <div className="pt-4 flex justify-end">
           <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">

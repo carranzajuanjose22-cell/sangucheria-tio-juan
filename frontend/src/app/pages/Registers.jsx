@@ -54,9 +54,9 @@ export function Registers() {
               </div>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Empleado</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Colaborador</label>
               <select value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">Todos los empleados</option>
+                <option value="">Todos los colaboradores</option>
                 {uniqueEmployees.map((emp) => <option key={emp} value={emp}>{emp}</option>)}
               </select>
             </div>
@@ -74,7 +74,7 @@ export function Registers() {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600">Fecha y Hora</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600">Caja</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-600">Empleado</th>
+                <th className="px-6 py-4 text-sm font-semibold text-gray-600">Colaborador</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">Cant. Ventas</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">Ingreso Total</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-center">Acciones</th>

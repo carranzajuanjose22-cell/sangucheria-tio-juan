@@ -3,6 +3,7 @@
 const { db } = require('../db');
 const { inputItems } = require('../models/schema');
 const { eq } = require('drizzle-orm');
+const { assertNonNegative } = require('../utils/numbers');
 
 function newId() {
   return crypto.randomUUID();
@@ -13,6 +14,7 @@ async function getAllInputs() {
 }
 
 async function createInput(data) {
+  assertNonNegative(data.price, 'El precio');
   const [item] = await db
     .insert(inputItems)
     .values({ ...data, id: newId() })
@@ -21,6 +23,7 @@ async function createInput(data) {
 }
 
 async function updateInput(id, data) {
+  if (data.price !== undefined) assertNonNegative(data.price, 'El precio');
   const [item] = await db
     .update(inputItems)
     .set(data)

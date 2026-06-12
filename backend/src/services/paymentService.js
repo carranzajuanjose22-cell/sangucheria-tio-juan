@@ -3,6 +3,7 @@
 const { db } = require('../db');
 const { paymentMethods } = require('../models/schema');
 const { eq } = require('drizzle-orm');
+const { assertNonNegative } = require('../utils/numbers');
 
 function newId() {
   return crypto.randomUUID();
@@ -13,6 +14,7 @@ async function getAllPayments() {
 }
 
 async function createPayment(data) {
+  assertNonNegative(data.surcharge, 'El recargo');
   const [payment] = await db
     .insert(paymentMethods)
     .values({ ...data, id: newId() })
@@ -21,6 +23,7 @@ async function createPayment(data) {
 }
 
 async function updatePayment(id, data) {
+  if (data.surcharge !== undefined) assertNonNegative(data.surcharge, 'El recargo');
   const [payment] = await db
     .update(paymentMethods)
     .set(data)
