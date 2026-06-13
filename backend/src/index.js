@@ -56,7 +56,24 @@ async function seedAdmin() {
     password: hashedPassword,
     role: 'Admin',
   });
-  console.log('✅ Admin creado (admin@sangucheria.com / admin). CAMBIÁ la contraseña cuanto antes.');
+  console.log('✅ Admin creado (admin@sangucheria.com / admin123). CAMBIÁ la contraseña cuanto antes.');
+}
+
+async function seedCreator() {
+  const result = await db.select().from(users).where(eq(users.email, 'creador@sangucheria.com'));
+  if (result.length > 0) {
+    console.log('ℹ️  Creador ya existe en la BD.');
+    return;
+  }
+  const hashedPassword = await bcrypt.hash('creador123', 10);
+  await db.insert(users).values({
+    id: crypto.randomUUID(),
+    name: 'Creador del Sistema',
+    email: 'creador@sangucheria.com',
+    password: hashedPassword,
+    role: 'Creador',
+  });
+  console.log('✅ Creador creado (creador@sangucheria.com / creador123). CAMBIÁ la contraseña cuanto antes.');
 }
 
 async function start() {
@@ -71,6 +88,12 @@ async function start() {
     await seedAdmin();
   } catch (error) {
     console.error('❌ No se pudo crear el admin inicial:', error);
+  }
+
+  try {
+    await seedCreator();
+  } catch (error) {
+    console.error('❌ No se pudo crear el creador inicial:', error);
   }
 
   app.listen(PORT, () => {

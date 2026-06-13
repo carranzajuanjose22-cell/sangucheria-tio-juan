@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, Outlet } from "react-router";
 import { AdminLayout } from "./components/AdminLayout.jsx";
 import { EmployeeLayout } from "./components/EmployeeLayout.jsx";
 import { Dashboard } from "./pages/Dashboard.jsx";
@@ -9,6 +9,8 @@ import { EmployeePos } from "./pages/EmployeePos.jsx";
 import { EmployeeSales } from "./pages/EmployeeSales.jsx";
 import { Registers } from "./pages/Registers.jsx";
 import { Statistics } from "./pages/Statistics.jsx";
+import { SubscriptionOverlay } from "./modules/subscription/index.jsx";
+import { CreatorDashboard } from "./modules/subscription/index.jsx";
 
 function isTokenExpired(token) {
   try {
@@ -22,6 +24,7 @@ function isTokenExpired(token) {
 function clearSession() {
   localStorage.removeItem("pos_token");
   localStorage.removeItem("pos_user");
+  localStorage.removeItem("userRole");
 }
 
 function RequireAuth({ children, adminOnly = false }) {
@@ -43,41 +46,80 @@ function RequireAuth({ children, adminOnly = false }) {
   return children;
 }
 
+function RequireCreator({ children }) {
+  const token = localStorage.getItem("pos_token");
+  const userRaw = localStorage.getItem("pos_user");
+
+  if (!token || !userRaw || isTokenExpired(token)) {
+    clearSession();
+    return <Navigate to="/" replace />;
+  }
+
+  const user = JSON.parse(userRaw);
+  if (user.role !== "Creador") {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
+function RootLayout() {
+  return (
+    <>
+      <SubscriptionOverlay />
+      <Outlet />
+    </>
+  );
+}
+
 export const router = createBrowserRouter([
   {
-    path: "/",
-    Component: Login,
-  },
-  {
-    path: "/admin",
-    element: (
-      <RequireAuth adminOnly>
-        <AdminLayout />
-      </RequireAuth>
-    ),
+    element: <RootLayout />,
     children: [
-      { index: true, Component: Dashboard },
-      { path: "pos", Component: EmployeePos },
-      { path: "registers", Component: Registers },
-      { path: "statistics", Component: Statistics },
-      { path: "users", Component: Users },
-      { path: "settings", Component: Settings },
+      {
+        path: "/",
+        Component: Login,
+      },
+      {
+        path: "/creator",
+        element: (
+          <RequireCreator>
+            <CreatorDashboard />
+          </RequireCreator>
+        ),
+      },
+      {
+        path: "/admin",
+        element: (
+          <RequireAuth adminOnly>
+            <AdminLayout />
+          </RequireAuth>
+        ),
+        children: [
+          { index: true, Component: Dashboard },
+          { path: "pos", Component: EmployeePos },
+          { path: "registers", Component: Registers },
+          { path: "statistics", Component: Statistics },
+          { path: "users", Component: Users },
+          { path: "settings", Component: Settings },
+        ],
+      },
+      {
+        path: "/employee",
+        element: (
+          <RequireAuth>
+            <EmployeeLayout />
+          </RequireAuth>
+        ),
+        children: [
+          { index: true, Component: EmployeePos },
+          { path: "sales", Component: EmployeeSales },
+        ],
+      },
+      {
+        path: "*",
+        element: <Navigate to="/" replace />,
+      },
     ],
-  },
-  {
-    path: "/employee",
-    element: (
-      <RequireAuth>
-        <EmployeeLayout />
-      </RequireAuth>
-    ),
-    children: [
-      { index: true, Component: EmployeePos },
-      { path: "sales", Component: EmployeeSales },
-    ],
-  },
-  {
-    path: "*",
-    element: <Navigate to="/" replace />,
   },
 ]);

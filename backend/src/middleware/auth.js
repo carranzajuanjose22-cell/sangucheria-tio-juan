@@ -26,4 +26,11 @@ function adminOnly(req, res, next) {
   next();
 }
 
-module.exports = { authMiddleware, adminOnly };
+function creatorOnly(req, res, next) {
+  if (req.user?.role !== 'Creador') {
+    return res.status(403).json({ error: 'Acceso restringido al creador del sistema.' });
+  }
+  next();
+}
+
+module.exports = { authMiddleware, adminOnly, creatorOnly };

@@ -15,6 +15,7 @@ export function EmployeeLayout() {
   const handleLogout = () => {
     localStorage.removeItem("pos_token");
     localStorage.removeItem("pos_user");
+    localStorage.removeItem("userRole");
     navigate("/");
   };
 
