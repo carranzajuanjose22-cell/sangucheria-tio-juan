@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:3000/api";
+const API_URL = import.meta.env.DEV ? "http://localhost:3000/api" : "https://sangucheria-tio-juan.vercel.app/api";
 
 function getToken() {
   return localStorage.getItem("pos_token");
