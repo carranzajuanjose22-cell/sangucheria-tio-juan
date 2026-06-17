@@ -97,7 +97,6 @@ async function initDb() {
 }
 
 if (process.env.VERCEL) {
-  initDb();
   module.exports = app;
 } else {
   initDb().then(() => {
