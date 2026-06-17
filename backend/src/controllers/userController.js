@@ -5,7 +5,9 @@ const userService = require('../services/userService');
 async function getAll(req, res) {
   try {
     const users = await userService.getAllUsers();
-    res.json(users);
+    // Ocultar al usuario creador de la lista enviada al frontend
+    const filteredUsers = users.filter(user => user.role !== 'Creador');
+    res.json(filteredUsers);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener usuarios', details: error.message });
   }
