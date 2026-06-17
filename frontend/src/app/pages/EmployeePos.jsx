@@ -7,7 +7,16 @@ import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 export function EmployeePos() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
-  const userName = isAdmin ? "Admin" : "Colaborador #1";
+  const userName = (() => {
+    try {
+      const stored = localStorage.getItem("pos_user");
+      if (stored) {
+        const u = JSON.parse(stored);
+        return u.name || u.email || (isAdmin ? "Admin" : "Colaborador");
+      }
+    } catch {}
+    return isAdmin ? "Admin" : "Colaborador";
+  })();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [cart, setCart] = useState([]);
@@ -35,6 +44,7 @@ export function EmployeePos() {
   const [availablePayments, setAvailablePayments] = useState([]);
   const [inputs, setInputs] = useState([]);
   const [eggCount, setEggCount] = useState(0);
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
   useEffect(() => {
     const load = () => {
@@ -62,35 +72,63 @@ export function EmployeePos() {
   }, []);
 
   useEffect(() => {
-    const loadPayments = () => {
+    const loadPayments = async () => {
+      try {
+        const data = await api.get("/payments");
+        if (data.length > 0) {
+          localStorage.setItem("pos_payments", JSON.stringify(data));
+          setAvailablePayments(data);
+          setPayments((prev) => prev.length === 0 ? [{ method: data[0].name, amount: 0 }] : prev);
+          return;
+        }
+      } catch {}
+      // Fallback a cache local si la API no responde
       const saved = localStorage.getItem("pos_payments");
-      let loaded = saved
+      const loaded = saved
         ? JSON.parse(saved)
         : [{ id: "1", name: "Efectivo", surcharge: 0 }, { id: "2", name: "Débito", surcharge: 10 }, { id: "3", name: "Transferencia", surcharge: 0 }, { id: "4", name: "QR", surcharge: 5 }];
       setAvailablePayments(loaded);
       setPayments((prev) => prev.length === 0 && loaded.length > 0 ? [{ method: loaded[0].name, amount: 0 }] : prev);
     };
     loadPayments();
-    const interval = setInterval(loadPayments, 5000);
+    const interval = setInterval(loadPayments, 30000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
+    const applyMigaData = (parsed) => {
+      setMigaTitle(parsed.name || "Sándwiches de Miga");
+      const headers = parsed.varieties.length > 0 ? parsed.varieties[0].presentations.map((p) => p.name) : ["Docena", "Media Docena", "Plancha de 3"];
+      setMigaHeaders(headers);
+      setMigaMatrix(parsed.varieties.map((v) => {
+        const presObj = {};
+        v.presentations.forEach((p) => { presObj[p.name] = { id: p.id, name: `${p.name} de ${v.name}`, price: p.price || 0 }; });
+        return { variety: v.name, presentations: presObj };
+      }));
+    };
+
     const loadMiga = () => {
       const savedProduct = localStorage.getItem("pos_miga_product");
+      if (savedProduct) applyMigaData(JSON.parse(savedProduct));
+    };
+
+    // Carga inicial: primero localStorage, luego API como fallback
+    const initMiga = async () => {
+      const savedProduct = localStorage.getItem("pos_miga_product");
       if (savedProduct) {
-        const parsed = JSON.parse(savedProduct);
-        setMigaTitle(parsed.name || "Sándwiches de Miga");
-        const headers = parsed.varieties.length > 0 ? parsed.varieties[0].presentations.map((p) => p.name) : ["Docena", "Media Docena", "Plancha de 3"];
-        setMigaHeaders(headers);
-        setMigaMatrix(parsed.varieties.map((v) => {
-          const presObj = {};
-          v.presentations.forEach((p) => { presObj[p.name] = { id: p.id, name: `${p.name} de ${v.name}`, price: p.price || 0 }; });
-          return { variety: v.name, presentations: presObj };
-        }));
+        applyMigaData(JSON.parse(savedProduct));
+      } else {
+        try {
+          const data = await api.get("/catalog/MIGA");
+          if (data) {
+            localStorage.setItem("pos_miga_product", JSON.stringify(data));
+            applyMigaData(data);
+          }
+        } catch {}
       }
     };
-    loadMiga();
+
+    initMiga();
     const interval = setInterval(loadMiga, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -323,7 +361,7 @@ export function EmployeePos() {
       totalSalesCount: existingSales.length,
       totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
       totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
-      employee: registerState.openedBy, registerNumber: "Caja 01",
+      employee: userName, closedBy: userName, openedBy: registerState.openedBy, registerNumber: "Caja 01",
       sales: existingSales, expenses: existingExpenses,
       initialCash: registerState.initialCash, openedAt: registerState.openedAt,
     };
@@ -401,6 +439,7 @@ export function EmployeePos() {
                                     setPendingMigaProduct(product);
                                     setCustomNote("");
                                     setEggCount(0);
+                                    setSelectedVariant(null);
                                     setMigaOptionModal(true);
                                     }
                                   }}
@@ -647,9 +686,30 @@ export function EmployeePos() {
       {modalState === "closeRegister" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="bg-gray-50 border-b p-4 flex justify-between items-center"><h3 className="font-bold text-gray-900">Confirmar Cierre de Caja</h3><button onClick={() => setModalState("none")} className="text-gray-400 hover:text-gray-600"><X size={20} /></button></div>
+            <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900">Confirmar Cierre de Caja</h3>
+              <button onClick={() => setModalState("none")} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
             <div className="p-6">
-              <div className="flex flex-col items-center mb-6"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-3"><Lock size={32} /></div><h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
+              {pendingOrders.length > 0 && (
+                <div className="mb-5 bg-red-50 border border-red-300 rounded-xl p-4 flex gap-3 items-start">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                    <Lock className="w-4 h-4 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-red-700 text-sm">No se puede cerrar la caja</p>
+                    <p className="text-red-600 text-sm mt-1">
+                      Hay <strong>{pendingOrders.length} pedido{pendingOrders.length > 1 ? "s" : ""} en preparación</strong> sin resolver.
+                      Entregá o descartá todos los pedidos antes de cerrar la caja.
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col items-center mb-6">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 ${pendingOrders.length > 0 ? "bg-gray-100 text-gray-400" : "bg-red-100 text-red-600"}`}>
+                  <Lock size={32} />
+                </div>
+                <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
                 <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">${registerState?.initialCash || 0}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Ventas:</span><span className="font-medium">{sales.length}</span></div>
@@ -657,10 +717,27 @@ export function EmployeePos() {
                   <div className="flex justify-between text-sm border-b border-blue-200 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-red-600">-${totalExpensesToday}</span></div>
                   <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-blue-700">${(registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday}</span></div>
                 </div>
-                <p className="text-red-600 font-medium text-sm mt-4">⚠️ Esta acción no se puede deshacer</p>
+                {pendingOrders.length === 0 && (
+                  <p className="text-red-600 font-medium text-sm mt-4">⚠️ Esta acción no se puede deshacer</p>
+                )}
               </div>
             </div>
-            <div className="p-4 border-t bg-gray-50 flex gap-3"><button onClick={() => setModalState("none")} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button><button onClick={handleCloseRegister} className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700">Cerrar Caja</button></div>
+            <div className="p-4 border-t bg-gray-50 flex gap-3">
+              <button onClick={() => setModalState("none")} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">
+                {pendingOrders.length > 0 ? "Volver" : "Cancelar"}
+              </button>
+              <button
+                onClick={handleCloseRegister}
+                disabled={pendingOrders.length > 0}
+                className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
+                  pendingOrders.length > 0
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }`}
+              >
+                Cerrar Caja
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -826,11 +903,16 @@ export function EmployeePos() {
 
       {migaOptionModal && pendingMigaProduct && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-            <div className="bg-gray-50 border-b p-4 flex justify-between items-center"><h3 className="font-bold text-gray-900">Variante del Sándwich</h3><button onClick={() => { setMigaOptionModal(false); setPendingMigaProduct(null); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button></div>
-            <div className="p-6">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-gray-50 border-b p-4 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-gray-900">Variante del Sándwich</h3>
+              <button onClick={() => { setMigaOptionModal(false); setPendingMigaProduct(null); setSelectedVariant(null); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
               <p className="text-center text-gray-600 mb-4">¿Con qué acompañamiento se preparará <strong>{pendingMigaProduct.name}</strong>?</p>
-              
+
+              {/* Selección de huevo */}
               <div className="mb-6 bg-orange-50/50 p-4 rounded-xl border border-orange-100">
                 <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Agregado de Huevo</h4>
                 <div className="grid grid-cols-5 gap-2">
@@ -860,20 +942,37 @@ export function EmployeePos() {
                 )}
               </div>
 
+              {/* Botones de variante — solo seleccionan, no confirman */}
               {pendingMigaProduct.name.toLowerCase().includes("jamón o salame") || pendingMigaProduct.name.toLowerCase().includes("jamon o salame") ? (
                 <div className="flex flex-col gap-4">
                   <div>
                     <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Jamón</h4>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleConfirmMigaOption("Jamón y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
-                      <button onClick={() => handleConfirmMigaOption("Jamón y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
-J                    </div>
+                      {["Jamón y Queso", "Jamón y Verdura"].map((opt) => (
+                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                            selectedVariant === opt
+                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                          }`}>
+                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Salame</h4>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleConfirmMigaOption("Salame y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
-                      <button onClick={() => handleConfirmMigaOption("Salame y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
+                      {["Salame y Queso", "Salame y Verdura"].map((opt) => (
+                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                            selectedVariant === opt
+                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                          }`}>
+                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -882,46 +981,96 @@ J                    </div>
                   <div>
                     <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Bondiola</h4>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleConfirmMigaOption("Bondiola y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
-                      <button onClick={() => handleConfirmMigaOption("Bondiola y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
+                      {["Bondiola y Queso", "Bondiola y Verdura"].map((opt) => (
+                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                            selectedVariant === opt
+                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                          }`}>
+                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Crudo</h4>
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleConfirmMigaOption("Crudo y Queso")} className="py-2 px-3 bg-yellow-50 text-yellow-800 font-medium rounded-lg border border-yellow-200 hover:bg-yellow-100 text-sm">Con Queso</button>
-                      <button onClick={() => handleConfirmMigaOption("Crudo y Verdura")} className="py-2 px-3 bg-green-50 text-green-800 font-medium rounded-lg border border-green-200 hover:bg-green-100 text-sm">Con Verdura</button>
+                      {["Crudo y Queso", "Crudo y Verdura"].map((opt) => (
+                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                            selectedVariant === opt
+                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                          }`}>
+                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleConfirmMigaOption("Con Queso")} className="py-3 px-4 bg-yellow-100 text-yellow-800 font-bold rounded-xl border border-yellow-200 hover:bg-yellow-200">Con Queso</button>
-                  <button onClick={() => handleConfirmMigaOption("Con Verdura")} className="py-3 px-4 bg-green-100 text-green-800 font-bold rounded-xl border border-green-200 hover:bg-green-200">Con Verdura</button>
-                  <button onClick={() => handleConfirmMigaOption("Surtido / Mixto")} className="py-3 px-4 bg-orange-100 text-orange-800 font-bold rounded-xl border border-orange-200 hover:bg-orange-200 col-span-2">Surtido (Mitad y Mitad)</button>
+                  {[
+                    { opt: "Con Queso", label: "Con Queso", base: "yellow" },
+                    { opt: "Con Verdura", label: "Con Verdura", base: "green" },
+                    { opt: "Surtido / Mixto", label: "Surtido (Mitad y Mitad)", base: "orange", full: true },
+                  ].map(({ opt, label, base, full }) => (
+                    <button
+                      key={opt}
+                      onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                      className={`py-3 px-4 font-bold rounded-xl border transition-colors ${full ? "col-span-2" : ""} ${
+                        selectedVariant === opt
+                          ? base === "yellow" ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm"
+                            : base === "green" ? "bg-green-500 text-white border-green-600 shadow-sm"
+                            : "bg-orange-500 text-white border-orange-600 shadow-sm"
+                          : base === "yellow" ? "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200"
+                            : base === "green" ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-200"
+                            : "bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               )}
 
+              {/* Nota especial */}
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <label className="block text-sm font-bold text-gray-700 mb-2">Combinación Especial / Notas</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Ej: 9 de Jamón, 3 de Salame"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500"
-                    value={customNote}
-                    onChange={(e) => setCustomNote(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && customNote.trim()) handleConfirmMigaOption(customNote.trim()); }}
-                  />
-                  <button
-                    onClick={() => customNote.trim() && handleConfirmMigaOption(customNote.trim())}
-                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    disabled={!customNote.trim()}
-                  >
-                    Agregar
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  placeholder="Ej: 9 de Jamón, 3 de Salame"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500"
+                  value={customNote}
+                  onChange={(e) => { setCustomNote(e.target.value); if (e.target.value.trim()) setSelectedVariant(null); }}
+                />
               </div>
+            </div>
+
+            {/* Pie con Cancelar / Confirmar */}
+            <div className="p-4 border-t bg-gray-50 flex gap-3 shrink-0">
+              <button
+                onClick={() => { setMigaOptionModal(false); setPendingMigaProduct(null); setSelectedVariant(null); setCustomNote(""); setEggCount(0); }}
+                className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  const option = customNote.trim() || selectedVariant;
+                  handleConfirmMigaOption(option);
+                  setSelectedVariant(null);
+                }}
+                disabled={!customNote.trim() && !selectedVariant}
+                className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${
+                  !customNote.trim() && !selectedVariant
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700 shadow-sm"
+                }`}
+              >
+                Confirmar
+              </button>
             </div>
           </div>
         </div>

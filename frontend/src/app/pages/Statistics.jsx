@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import { api } from "./api.js";
 
 export function Statistics() {
   const [registers, setRegisters] = useState([]);
@@ -16,8 +17,6 @@ export function Statistics() {
   const loadData = () => {
     const saved = localStorage.getItem("pos_registers");
     if (saved) setRegisters(JSON.parse(saved));
-    const savedServices = localStorage.getItem("pos_services");
-    if (savedServices) setServices(JSON.parse(savedServices));
     const savedPurchases = localStorage.getItem("pos_purchases");
     if (savedPurchases) setPurchases(JSON.parse(savedPurchases));
     const savedCatalog = localStorage.getItem("pos_miga_product");
@@ -30,6 +29,12 @@ export function Statistics() {
     loadData();
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    api.get("/services")
+      .then((data) => setServices(data))
+      .catch(() => {});
   }, []);
 
   const todayStr = () => new Date().toLocaleDateString("es-AR");
@@ -127,14 +132,17 @@ export function Statistics() {
   const tachosMayonesa = Math.floor(totalDocenas / 3);
 
   const productStats = {};
-  filteredSales.forEach((sale) => {
+  filteredSales.forEach((sale, saleIdx) => {
     sale.items.forEach((item) => {
-      if (!productStats[item.name]) productStats[item.name] = { quantity: 0, revenue: 0 };
+      if (!productStats[item.name]) productStats[item.name] = { quantity: 0, revenue: 0, lastSaleIdx: saleIdx };
       productStats[item.name].quantity += item.quantity;
       productStats[item.name].revenue += item.price * item.quantity;
+      productStats[item.name].lastSaleIdx = saleIdx;
     });
   });
-  const allProducts = Object.entries(productStats).map(([name, stats]) => ({ name, ...stats })).sort((a, b) => b.revenue - a.revenue);
+  const allProducts = Object.entries(productStats)
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.lastSaleIdx - a.lastSaleIdx);
 
   const employeeHoursStats = {};
   filteredRegisters.forEach((record) => {

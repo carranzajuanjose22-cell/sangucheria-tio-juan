@@ -1,18 +1,27 @@
 import { useState, useEffect } from "react";
 import { Archive, DollarSign, Calendar, Eye, X, Receipt, Tag, TrendingUp, Filter, TrendingDown } from "lucide-react";
+import { api } from "./api.js";
 
 export function Registers() {
   const [registers, setRegisters] = useState([]);
   const [selectedRegister, setSelectedRegister] = useState(null);
   const [filterDate, setFilterDate] = useState("");
   const [filterEmployee, setFilterEmployee] = useState("");
+  const [systemUsers, setSystemUsers] = useState([]);
 
   useEffect(() => {
     const saved = localStorage.getItem("pos_registers");
     if (saved) setRegisters(JSON.parse(saved));
   }, []);
 
-  const uniqueEmployees = Array.from(new Set(registers.map((r) => r.employee)));
+  useEffect(() => {
+    api.get("/users")
+      .then((data) => {
+        const filtered = data.filter((u) => u.role !== "Creador" && u.status !== "Inactivo");
+        setSystemUsers(filtered.map((u) => u.name || u.email));
+      })
+      .catch(() => {});
+  }, []);
 
   const filteredRegisters = registers.filter((record) => {
     const matchesDate = !filterDate || new Date(record.date).toLocaleDateString("es-AR") === new Date(filterDate).toLocaleDateString("es-AR");
@@ -20,16 +29,29 @@ export function Registers() {
     return matchesDate && matchesEmployee;
   });
 
+  const LEGACY_NAMES = ["Colaborador #1", "Colaborador"];
+
+  // Unión de usuarios del sistema + usuarios reales de registros históricos (sin duplicados ni nombres legacy)
+  const allFilterUsers = Array.from(
+    new Set([
+      ...systemUsers,
+      ...registers.map((r) => r.employee).filter((e) => e && !LEGACY_NAMES.includes(e)),
+    ])
+  );
+
   const getProductSummary = (sales) => {
     const summary = {};
-    sales.forEach((sale) => {
+    sales.forEach((sale, saleIdx) => {
       sale.items.forEach((item) => {
-        if (!summary[item.id]) summary[item.id] = { name: item.name, quantity: 0, revenue: 0 };
+        if (!summary[item.id]) {
+          summary[item.id] = { name: item.name, quantity: 0, revenue: 0, lastSaleIdx: saleIdx };
+        }
         summary[item.id].quantity += item.quantity;
         summary[item.id].revenue += item.price * item.quantity;
+        summary[item.id].lastSaleIdx = saleIdx;
       });
     });
-    return Object.values(summary).sort((a, b) => b.revenue - a.revenue);
+    return Object.values(summary).sort((a, b) => b.lastSaleIdx - a.lastSaleIdx);
   };
 
   return (
@@ -54,10 +76,10 @@ export function Registers() {
               </div>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Colaborador</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
               <select value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">Todos los colaboradores</option>
-                {uniqueEmployees.map((emp) => <option key={emp} value={emp}>{emp}</option>)}
+                <option value="">Todos los usuarios</option>
+                {allFilterUsers.map((emp) => <option key={emp} value={emp}>{emp}</option>)}
               </select>
             </div>
             {(filterDate || filterEmployee) && (
@@ -74,7 +96,7 @@ export function Registers() {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600">Fecha y Hora</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600">Caja</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-600">Colaborador</th>
+                <th className="px-6 py-4 text-sm font-semibold text-gray-600">Usuario</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">Cant. Ventas</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">Ingreso Total</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-center">Acciones</th>
@@ -129,7 +151,10 @@ export function Registers() {
                 <div className="text-gray-500 text-sm mt-1 space-y-1">
                   <p className="flex items-center gap-2"><Calendar size={14} /> Cerrada: {new Date(selectedRegister.date).toLocaleDateString("es-AR")} - {new Date(selectedRegister.date).toLocaleTimeString("es-AR", { hour12: false })}</p>
                   {selectedRegister.openedAt && <p className="flex items-center gap-2"><Calendar size={14} /> Abierta: {new Date(selectedRegister.openedAt).toLocaleDateString("es-AR")} - {new Date(selectedRegister.openedAt).toLocaleTimeString("es-AR", { hour12: false })}</p>}
-                  <p>Atendió: {selectedRegister.employee}</p>
+                  <p>Cerró: {selectedRegister.employee}</p>
+                  {selectedRegister.openedBy && selectedRegister.openedBy !== selectedRegister.employee && (
+                    <p>Abrió: {selectedRegister.openedBy}</p>
+                  )}
                 </div>
               </div>
               <button onClick={() => setSelectedRegister(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200">

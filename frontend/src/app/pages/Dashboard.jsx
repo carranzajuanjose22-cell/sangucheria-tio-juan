@@ -1,8 +1,20 @@
 import { useState, useEffect } from "react";
 import { Receipt, ShoppingCart, Clock, Lock, Unlock, X, CheckCircle2, Eye } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import { api } from "./api.js";
 
 export function Dashboard() {
+  const userName = (() => {
+    try {
+      const stored = localStorage.getItem("pos_user");
+      if (stored) {
+        const u = JSON.parse(stored);
+        return u.name || u.email || "Admin";
+      }
+    } catch {}
+    return "Admin";
+  })();
+
   const [currentTime, setCurrentTime] = useState(new Date());
   const [sales, setSales] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -50,20 +62,24 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const load = () => {
+    const loadRegisters = () => {
       const savedRegisters = localStorage.getItem("pos_registers");
       if (savedRegisters) setRegisters(JSON.parse(savedRegisters));
-      const savedServices = localStorage.getItem("pos_services");
-      if (savedServices) setServices(JSON.parse(savedServices));
     };
-    load();
-    const interval = setInterval(load, 5000);
+    loadRegisters();
+    const interval = setInterval(loadRegisters, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    api.get("/services")
+      .then((data) => setServices(data))
+      .catch(() => {});
   }, []);
 
   const handleOpenRegister = () => {
     const cashAmount = nonNegative(initialCashInput);
-    const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: "Admin" };
+    const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
     localStorage.setItem("register_state", JSON.stringify(newState));
     setRegisterState(newState);
     setInitialCashInput("");
@@ -80,7 +96,9 @@ export function Dashboard() {
       totalSalesCount: existingSales.length,
       totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
       totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
-      employee: registerState.openedBy,
+      employee: userName,
+      closedBy: userName,
+      openedBy: registerState.openedBy,
       registerNumber: "Caja 01",
       sales: existingSales,
       expenses: existingExpenses,
