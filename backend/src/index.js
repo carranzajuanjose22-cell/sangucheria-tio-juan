@@ -76,12 +76,11 @@ async function seedCreator() {
   console.log('✅ Creador creado (creador@sangucheria.com / creador123). CAMBIÁ la contraseña cuanto antes.');
 }
 
-async function start() {
+async function initDb() {
   try {
     await ensureTables();
   } catch (error) {
     console.error('❌ No se pudieron asegurar las tablas:', error);
-    process.exit(1);
   }
 
   try {
@@ -95,10 +94,15 @@ async function start() {
   } catch (error) {
     console.error('❌ No se pudo crear el creador inicial:', error);
   }
-
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-  });
 }
 
-start();
+if (process.env.VERCEL) {
+  initDb();
+  module.exports = app;
+} else {
+  initDb().then(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+    });
+  });
+}
