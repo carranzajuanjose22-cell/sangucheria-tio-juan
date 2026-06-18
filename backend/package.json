@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "db:push": "node -e \"require('./src/models/migrate').ensureTables().then(() => { console.log('✅ db:push completado.'); process.exit(0); }).catch(e => { console.error(e); process.exit(1); })\""
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",

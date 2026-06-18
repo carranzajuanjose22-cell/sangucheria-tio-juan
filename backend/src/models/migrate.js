@@ -41,6 +41,10 @@ async function ensureTables() {
        "creadoEn"    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
        "actualizado" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
      )`,
+    `CREATE TABLE IF NOT EXISTS "cloud_store" (
+       "key"   TEXT PRIMARY KEY,
+       "value" TEXT
+     )`,
   ];
 
   for (const sql of statements) {
