@@ -47,13 +47,12 @@ export function EmployeePos() {
   const [selectedVariant, setSelectedVariant] = useState(null);
 
   useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem("register_state");
-      if (saved) setRegisterState(JSON.parse(saved));
-      else setRegisterState(null);
+    const load = async () => {
+      const saved = await api.get("/store/register_state").catch(() => null);
+      setRegisterState(saved);
     };
     load();
-    const interval = setInterval(load, 2000);
+    const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -134,31 +133,33 @@ export function EmployeePos() {
   }, []);
 
   useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem("pos_sales");
-      setSales(saved ? JSON.parse(saved) : []);
+    const load = async () => {
+      const saved = await api.get("/store/pos_sales").catch(() => []);
+      setSales(saved || []);
     };
     load();
-    const interval = setInterval(load, 2000);
+    const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem("pos_expenses");
-      setExpenses(saved ? JSON.parse(saved) : []);
+    const load = async () => {
+      const saved = await api.get("/store/pos_expenses").catch(() => []);
+      setExpenses(saved || []);
     };
     load();
-    const interval = setInterval(load, 2000);
+    const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem("pos_pending_orders");
-      setPendingOrders(saved ? JSON.parse(saved) : []);
+    const load = async () => {
+      const saved = await api.get("/store/pos_pending_orders").catch(() => []);
+      setPendingOrders(saved || []);
     };
     load();
+    const interval = setInterval(load, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const currentDate = new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -221,7 +222,7 @@ export function EmployeePos() {
     setPayments(newPayments);
   };
 
-  const handleLoadOrder = () => {
+  const handleLoadOrder = async () => {
     if (cart.length === 0 || isRegisterClosed) return;
     const newOrder = {
       id: Math.random().toString(36).substr(2, 9),
@@ -232,13 +233,17 @@ export function EmployeePos() {
       advanceNote: advanceNote.trim(),
       advanceAmount: nonNegative(advanceAmount)
     };
-    const updated = [...pendingOrders, newOrder];
-    setPendingOrders(updated);
-    localStorage.setItem("pos_pending_orders", JSON.stringify(updated));
-    setCart([]);
-    setCustomerName("");
-    setAdvanceNote("");
-    setAdvanceAmount("");
+    try {
+      const updated = [...pendingOrders, newOrder];
+      await api.post("/store/pos_pending_orders", updated);
+      setPendingOrders(updated);
+      setCart([]);
+      setCustomerName("");
+      setAdvanceNote("");
+      setAdvanceAmount("");
+    } catch (err) {
+      alert("Error al cargar la orden. Revisa tu conexión a internet.");
+    }
   };
 
   const handleDirectCharge = (keepInPrep) => {
@@ -264,17 +269,25 @@ export function EmployeePos() {
     setModalState("payment");
   };
 
-  const handleDeliverOrder = (id) => {
-    const updated = pendingOrders.filter(o => o.id !== id);
-    setPendingOrders(updated);
-    localStorage.setItem("pos_pending_orders", JSON.stringify(updated));
+  const handleDeliverOrder = async (id) => {
+    try {
+      const updated = pendingOrders.filter(o => o.id !== id);
+      await api.post("/store/pos_pending_orders", updated);
+      setPendingOrders(updated);
+    } catch (err) {
+      alert("Error al entregar la orden.");
+    }
   };
 
-  const handleDiscardOrder = (id) => {
+  const handleDiscardOrder = async (id) => {
     if (confirm("¿Estás seguro de descartar este pedido?")) {
-      const updated = pendingOrders.filter(o => o.id !== id);
-      setPendingOrders(updated);
-      localStorage.setItem("pos_pending_orders", JSON.stringify(updated));
+      try {
+        const updated = pendingOrders.filter(o => o.id !== id);
+        await api.post("/store/pos_pending_orders", updated);
+        setPendingOrders(updated);
+      } catch (err) {
+        alert("Error al descartar la orden.");
+      }
     }
   };
 
@@ -288,7 +301,7 @@ export function EmployeePos() {
     setModalState("payment");
   };
 
-  const handleRegisterSale = () => {
+  const handleRegisterSale = async () => {
     if (!payingOrder || isRegisterClosed) return;
     const requiredToPay = Math.max(0, total - (payingOrder.advanceAmount || 0));
     if (totalPaid < requiredToPay) { alert(`Falta pagar $${remaining.toFixed(2)}`); return; }
@@ -299,26 +312,27 @@ export function EmployeePos() {
     }
     const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
     const newSale = { id: payingOrder.id, date: new Date().toISOString(), items: [...payingOrder.items], total, paymentMethod: paymentMethodStr, payments: finalPayments, employee: userName, registerNumber: "Caja 01" };
-    const existingSales = JSON.parse(localStorage.getItem("pos_sales") || "[]");
-    const updatedSales = [...existingSales, newSale];
-    localStorage.setItem("pos_sales", JSON.stringify(updatedSales));
-    setSales(updatedSales);
-    setLastSale(newSale);
+    try {
+      const existingSales = await api.get("/store/pos_sales").catch(() => []) || [];
+      const updatedSales = [...existingSales, newSale];
+      await api.post("/store/pos_sales", updatedSales);
+      setSales(updatedSales);
+      setLastSale(newSale);
 
-    if (payingOrder.keepInPrep) {
-      const newPrepOrder = {
-        ...payingOrder,
-        isPaid: true,
-        advanceNote: payingOrder.advanceNote || "Pagado"
-      };
-      const updatedPending = [...pendingOrders, newPrepOrder];
-      setPendingOrders(updatedPending);
-      localStorage.setItem("pos_pending_orders", JSON.stringify(updatedPending));
-    } else {
-      const updatedPending = pendingOrders.filter(o => o.id !== payingOrder.id);
-      setPendingOrders(updatedPending);
-      localStorage.setItem("pos_pending_orders", JSON.stringify(updatedPending));
-    }
+      if (payingOrder.keepInPrep) {
+        const newPrepOrder = {
+          ...payingOrder,
+          isPaid: true,
+          advanceNote: payingOrder.advanceNote || "Pagado"
+        };
+        const updatedPending = [...pendingOrders, newPrepOrder];
+        await api.post("/store/pos_pending_orders", updatedPending);
+        setPendingOrders(updatedPending);
+      } else {
+        const updatedPending = pendingOrders.filter(o => o.id !== payingOrder.id);
+        await api.post("/store/pos_pending_orders", updatedPending);
+        setPendingOrders(updatedPending);
+      }
 
     if (payingOrder.isDirectCharge) {
       setCart([]);
@@ -330,45 +344,62 @@ export function EmployeePos() {
     setModalState("success");
     setPayingOrder(null);
     setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
+    } catch (err) {
+      alert("Error al registrar la venta. Revisa la conexión.");
+    }
   };
 
-  const handleOpenRegister = () => {
-    const cashAmount = nonNegative(initialCashInput);
-    const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
-    localStorage.setItem("register_state", JSON.stringify(newState));
-    setRegisterState(newState);
-    setInitialCashInput("");
-    setModalState("none");
+  const handleOpenRegister = async () => {
+    try {
+      const cashAmount = nonNegative(initialCashInput);
+      const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
+      await api.post("/store/register_state", newState);
+      setRegisterState(newState);
+      setInitialCashInput("");
+      setModalState("none");
+    } catch (err) {
+      alert("Error de conexión. Asegúrate de haber ejecutado 'npm run db:push' en el backend.");
+    }
   };
 
-  const handleRegisterExpense = () => {
-    const amount = nonNegative(expenseAmount);
-    if (!expenseDesc.trim() || amount <= 0) { alert("Por favor ingresa una descripción y un monto válido"); return; }
-    const newExpense = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), description: expenseDesc.trim(), amount, employee: userName };
-    const existingExpenses = JSON.parse(localStorage.getItem("pos_expenses") || "[]");
-    const updatedExpenses = [...existingExpenses, newExpense];
-    localStorage.setItem("pos_expenses", JSON.stringify(updatedExpenses));
-    setExpenses(updatedExpenses);
-    setExpenseDesc(""); setExpenseAmount(""); setModalState("none");
+  const handleRegisterExpense = async () => {
+    try {
+      const amount = nonNegative(expenseAmount);
+      if (!expenseDesc.trim() || amount <= 0) { alert("Por favor ingresa una descripción y un monto válido"); return; }
+      const newExpense = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), description: expenseDesc.trim(), amount, employee: userName };
+      const existingExpenses = await api.get("/store/pos_expenses").catch(() => []) || [];
+      const updatedExpenses = [...existingExpenses, newExpense];
+      await api.post("/store/pos_expenses", updatedExpenses);
+      setExpenses(updatedExpenses);
+      setExpenseDesc(""); setExpenseAmount(""); setModalState("none");
+    } catch (err) {
+      alert("Error al registrar el gasto.");
+    }
   };
 
-  const handleCloseRegister = () => {
+  const handleCloseRegister = async () => {
     if (!registerState) return;
-    const existingSales = JSON.parse(localStorage.getItem("pos_sales") || "[]");
-    const existingExpenses = JSON.parse(localStorage.getItem("pos_expenses") || "[]");
-    const closeRecord = {
-      id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(),
-      totalSalesCount: existingSales.length,
-      totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
-      totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
-      employee: userName, closedBy: userName, openedBy: registerState.openedBy, registerNumber: "Caja 01",
-      sales: existingSales, expenses: existingExpenses,
-      initialCash: registerState.initialCash, openedAt: registerState.openedAt,
-    };
-    const existingRegisters = JSON.parse(localStorage.getItem("pos_registers") || "[]");
-    localStorage.setItem("pos_registers", JSON.stringify([closeRecord, ...existingRegisters]));
-    localStorage.removeItem("register_state"); localStorage.removeItem("pos_sales"); localStorage.removeItem("pos_expenses");
-    setRegisterState(null); setSales([]); setExpenses([]); setModalState("closeSuccess");
+    try {
+      const existingSales = await api.get("/store/pos_sales").catch(() => []) || [];
+      const existingExpenses = await api.get("/store/pos_expenses").catch(() => []) || [];
+      const closeRecord = {
+        id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(),
+        totalSalesCount: existingSales.length,
+        totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
+        totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
+        employee: userName, closedBy: userName, openedBy: registerState.openedBy, registerNumber: "Caja 01",
+        sales: existingSales, expenses: existingExpenses,
+        initialCash: registerState.initialCash, openedAt: registerState.openedAt,
+      };
+      const existingRegisters = await api.get("/store/pos_registers").catch(() => []) || [];
+      await api.post("/store/pos_registers", [closeRecord, ...existingRegisters]);
+      await api.post("/store/register_state", null);
+      await api.post("/store/pos_sales", []);
+      await api.post("/store/pos_expenses", []);
+      setRegisterState(null); setSales([]); setExpenses([]); setModalState("closeSuccess");
+    } catch (err) {
+      alert("Error al cerrar la caja. Revisa tu conexión a internet.");
+    }
   };
 
   return (
@@ -943,97 +974,109 @@ export function EmployeePos() {
               </div>
 
               {/* Botones de variante — solo seleccionan, no confirman */}
-              {pendingMigaProduct.name.toLowerCase().includes("jamón o salame") || pendingMigaProduct.name.toLowerCase().includes("jamon o salame") ? (
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Jamón</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {["Jamón y Queso", "Jamón y Verdura"].map((opt) => (
-                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
-                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+              {(() => {
+                const nameLower = pendingMigaProduct.name.toLowerCase();
+                const isJamonSalame = (nameLower.includes("jamón") || nameLower.includes("jamon")) && nameLower.includes("salame");
+                const isBondiolaCrudo = nameLower.includes("bondiola") && nameLower.includes("crudo");
+
+                if (isJamonSalame) {
+                  return (
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Jamón</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {["Jamón y Queso", "Jamón y Verdura"].map((opt) => (
+                            <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                              className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                                selectedVariant === opt
+                                  ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                                  : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                              }`}>
+                              {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Salame</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {["Salame y Queso", "Salame y Verdura"].map((opt) => (
+                            <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                              className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                                selectedVariant === opt
+                                  ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                                  : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                              }`}>
+                              {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else if (isBondiolaCrudo) {
+                  return (
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Bondiola</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {["Bondiola y Queso", "Bondiola y Verdura"].map((opt) => (
+                            <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                              className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                                selectedVariant === opt
+                                  ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                                  : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                              }`}>
+                              {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Crudo</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {["Crudo y Queso", "Crudo y Verdura"].map((opt) => (
+                            <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                              className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
+                                selectedVariant === opt
+                                  ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
+                                  : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
+                              }`}>
+                              {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { opt: "Con Queso", label: "Con Queso", base: "yellow" },
+                        { opt: "Con Verdura", label: "Con Verdura", base: "green" },
+                        { opt: "Surtido / Mixto", label: "Surtido (Mitad y Mitad)", base: "orange", full: true },
+                      ].map(({ opt, label, base, full }) => (
+                        <button
+                          key={opt}
+                          onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
+                          className={`py-3 px-4 font-bold rounded-xl border transition-colors ${full ? "col-span-2" : ""} ${
                             selectedVariant === opt
-                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
-                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
-                          }`}>
-                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
+                              ? base === "yellow" ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm"
+                                : base === "green" ? "bg-green-500 text-white border-green-600 shadow-sm"
+                                : "bg-orange-500 text-white border-orange-600 shadow-sm"
+                              : base === "yellow" ? "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200"
+                                : base === "green" ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-200"
+                                : "bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200"
+                          }`}
+                        >
+                          {label}
                         </button>
                       ))}
                     </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Salame</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {["Salame y Queso", "Salame y Verdura"].map((opt) => (
-                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
-                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
-                            selectedVariant === opt
-                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
-                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
-                          }`}>
-                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : pendingMigaProduct.name.toLowerCase().includes("bondiola / crudo") || pendingMigaProduct.name.toLowerCase().includes("bondiola o crudo") ? (
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Bondiola</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {["Bondiola y Queso", "Bondiola y Verdura"].map((opt) => (
-                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
-                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
-                            selectedVariant === opt
-                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
-                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
-                          }`}>
-                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-700 mb-2 border-b pb-1">De Crudo</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {["Crudo y Queso", "Crudo y Verdura"].map((opt) => (
-                        <button key={opt} onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
-                          className={`py-2 px-3 font-medium rounded-lg border text-sm transition-colors ${
-                            selectedVariant === opt
-                              ? opt.includes("Queso") ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm" : "bg-green-500 text-white border-green-600 shadow-sm"
-                              : opt.includes("Queso") ? "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100" : "bg-green-50 text-green-800 border-green-200 hover:bg-green-100"
-                          }`}>
-                          {opt.includes("Queso") ? "Con Queso" : "Con Verdura"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { opt: "Con Queso", label: "Con Queso", base: "yellow" },
-                    { opt: "Con Verdura", label: "Con Verdura", base: "green" },
-                    { opt: "Surtido / Mixto", label: "Surtido (Mitad y Mitad)", base: "orange", full: true },
-                  ].map(({ opt, label, base, full }) => (
-                    <button
-                      key={opt}
-                      onClick={() => { setSelectedVariant(opt); setCustomNote(""); }}
-                      className={`py-3 px-4 font-bold rounded-xl border transition-colors ${full ? "col-span-2" : ""} ${
-                        selectedVariant === opt
-                          ? base === "yellow" ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm"
-                            : base === "green" ? "bg-green-500 text-white border-green-600 shadow-sm"
-                            : "bg-orange-500 text-white border-orange-600 shadow-sm"
-                          : base === "yellow" ? "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200"
-                            : base === "green" ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-200"
-                            : "bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
+                  );
+                }
+              })()}
 
               {/* Nota especial */}
               <div className="mt-6 pt-4 border-t border-gray-200">

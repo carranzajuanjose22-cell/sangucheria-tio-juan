@@ -13,16 +13,21 @@ export function Statistics() {
   const [purchaseDesc, setPurchaseDesc] = useState("");
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [catalog, setCatalog] = useState(null);
+  const [currentExpenses, setCurrentExpenses] = useState([]);
 
-  const loadData = () => {
-    const saved = localStorage.getItem("pos_registers");
-    if (saved) setRegisters(JSON.parse(saved));
-    const savedPurchases = localStorage.getItem("pos_purchases");
-    if (savedPurchases) setPurchases(JSON.parse(savedPurchases));
-    const savedCatalog = localStorage.getItem("pos_miga_product");
-    if (savedCatalog) setCatalog(JSON.parse(savedCatalog));
-    const savedCurrentSales = localStorage.getItem("pos_sales");
-    setCurrentSales(savedCurrentSales ? JSON.parse(savedCurrentSales) : []);
+  const loadData = async () => {
+    const [savedRegs, savedPurchases, savedCatalog, savedSales, savedExpenses] = await Promise.all([
+      api.get("/store/pos_registers").catch(() => []),
+      api.get("/store/pos_purchases").catch(() => []),
+      api.get("/catalog/MIGA").catch(() => null),
+      api.get("/store/pos_sales").catch(() => []),
+      api.get("/store/pos_expenses").catch(() => []),
+    ]);
+    setRegisters(savedRegs || []);
+    setPurchases(savedPurchases || []);
+    setCatalog(savedCatalog);
+    setCurrentSales(savedSales || []);
+    setCurrentExpenses(savedExpenses || []);
   };
 
   useEffect(() => {
@@ -79,9 +84,6 @@ export function Statistics() {
   const filteredPurchases = getFilteredPurchases();
   const totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.amount, 0);
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-  const currentExpenses = (() => {
-    try { return JSON.parse(localStorage.getItem("pos_expenses") || "[]"); } catch { return []; }
-  })();
   const filteredCurrentExpenses = (() => {
     if (dateRange === "today") return currentExpenses.filter((e) => new Date(e.date).toLocaleDateString("es-AR") === todayStr());
     if (dateRange === "all") return currentExpenses;
@@ -155,14 +157,18 @@ export function Statistics() {
   });
   const employeeHoursArray = Object.entries(employeeHoursStats).map(([name, stats]) => ({ name, ...stats })).sort((a, b) => b.hours - a.hours);
 
-  const handleRegisterPurchase = () => {
+  const handleRegisterPurchase = async () => {
     const amount = nonNegative(purchaseAmount);
     if (!purchaseDesc.trim() || amount <= 0) { alert("Por favor ingresa una etiqueta y un monto válido"); return; }
-    const newPurchase = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), description: purchaseDesc.trim(), amount };
-    const updated = [...purchases, newPurchase];
-    localStorage.setItem("pos_purchases", JSON.stringify(updated));
-    setPurchases(updated);
-    setPurchaseDesc(""); setPurchaseAmount(""); setIsModalOpen(false);
+    try {
+      const newPurchase = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), description: purchaseDesc.trim(), amount };
+      const updated = [...purchases, newPurchase];
+      await api.post("/store/pos_purchases", updated);
+      setPurchases(updated);
+      setPurchaseDesc(""); setPurchaseAmount(""); setIsModalOpen(false);
+    } catch (err) {
+      alert("Error al registrar la compra. Revisa tu conexión.");
+    }
   };
 
   const formatHours = (h) => `${Math.floor(h)}h ${Math.round((h - Math.floor(h)) * 60).toString().padStart(2, "0")}m`;

@@ -1,19 +1,19 @@
 import { useState, useEffect } from "react";
 import { Receipt, Clock, CreditCard, Printer, X } from "lucide-react";
+import { api } from "./api.js";
 
 export function EmployeeSales() {
   const [sales, setSales] = useState([]);
   const [selectedSale, setSelectedSale] = useState(null);
 
   useEffect(() => {
-    const loadSales = () => {
-      const savedSales = localStorage.getItem("pos_sales");
-      if (savedSales) setSales(JSON.parse(savedSales));
-      else setSales([]);
+    const loadSales = async () => {
+      const savedSales = await api.get("/store/pos_sales").catch(() => []);
+      setSales(savedSales || []);
     };
     loadSales();
-    window.addEventListener("storage", loadSales);
-    return () => window.removeEventListener("storage", loadSales);
+    const interval = setInterval(loadSales, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const totalsByMethod = sales.reduce((acc, sale) => {

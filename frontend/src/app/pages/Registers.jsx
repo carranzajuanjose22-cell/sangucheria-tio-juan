@@ -10,8 +10,13 @@ export function Registers() {
   const [systemUsers, setSystemUsers] = useState([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem("pos_registers");
-    if (saved) setRegisters(JSON.parse(saved));
+    const load = async () => {
+      const saved = await api.get("/store/pos_registers").catch(() => []);
+      setRegisters(saved || []);
+    };
+    load();
+    const interval = setInterval(load, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

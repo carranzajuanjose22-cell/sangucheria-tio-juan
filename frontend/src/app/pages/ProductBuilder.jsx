@@ -5,22 +5,26 @@ import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
 
 function createMigaTemplate() {
   const rnd = () => Math.random().toString(36).substr(2, 9);
+  const makePres = () => [
+    { id: rnd(), name: "Docena", price: 0, recipe: [], recipe2: [] },
+    { id: rnd(), name: "Media Docena", price: 0, recipe: [], recipe2: [] },
+    { id: rnd(), name: "Plancha de 3", price: 0, recipe: [], recipe2: [] }
+  ];
   return {
     id: rnd(),
     name: "Sándwiches de Miga",
     varieties: [
-      { id: rnd(), name: "Paleta", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
-      { id: rnd(), name: "Jamón", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
-      { id: rnd(), name: "Salame", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
-      { id: rnd(), name: "Bondiola", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
-      { id: rnd(), name: "Crudo", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
-      { id: rnd(), name: "Ternera", presentations: [{ id: rnd(), name: "Docena", price: 0, recipe: [] }, { id: rnd(), name: "Media Docena", price: 0, recipe: [] }, { id: rnd(), name: "Plancha de 3", price: 0, recipe: [] }] },
+      { id: rnd(), name: "Paleta", presentations: makePres() },
+      { id: rnd(), name: "Jamón o Salame", presentations: makePres() },
+      { id: rnd(), name: "Bondiola o Crudo", presentations: makePres() },
+      { id: rnd(), name: "Ternera", presentations: makePres() },
     ],
   };
 }
 
 export function ProductBuilder({ customInputs = [] }) {
   const [product, setProduct] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const availableInsumos = customInputs.map((i) => ({
     id: i.id,
     name: i.name,
@@ -38,23 +42,56 @@ export function ProductBuilder({ customInputs = [] }) {
   const [newVarPrices, setNewVarPrices] = useState({ docena: "", media: "", plancha: "" });
   const [newVarIngredients, setNewVarIngredients] = useState([{ insumoId: "", quantity: "" }]);
 
+  const updateProduct = (newProduct) => {
+    setProduct(newProduct);
+    setHasUnsavedChanges(true);
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
         const saved = await api.get("/catalog/MIGA");
         setProduct(saved);
+        setHasUnsavedChanges(false);
       } catch {
         setProduct(createMigaTemplate());
+        setHasUnsavedChanges(false);
       }
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "Tienes cambios sin guardar en el catálogo. ¿Seguro que deseas salir?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (!hasUnsavedChanges) return;
+      const target = e.target.closest("a");
+      if (target && target.href && !target.href.includes(window.location.pathname) && target.target !== "_blank") {
+        if (!window.confirm("Tienes cambios sin guardar en el catálogo. ¿Seguro que deseas salir y perder los cambios?")) {
+          e.preventDefault();
+        }
+      }
+    };
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [hasUnsavedChanges]);
 
   const handleSaveCatalog = async () => {
     if (product) {
       try {
         await api.post("/catalog/MIGA", product);
         localStorage.setItem("pos_miga_product", JSON.stringify(product));
+        setHasUnsavedChanges(false);
         alert("Catálogo guardado correctamente en la base de datos.");
       } catch {
         alert("Error al guardar el catálogo.");
@@ -64,12 +101,12 @@ export function ProductBuilder({ customInputs = [] }) {
 
   const handleDeleteVariety = (id) => {
     if (!product || !confirm("¿Estás seguro de que deseas eliminar esta variedad?")) return;
-    setProduct({ ...product, varieties: product.varieties.filter((v) => v.id !== id) });
+    updateProduct({ ...product, varieties: product.varieties.filter((v) => v.id !== id) });
   };
 
   const handleResetTemplate = () => {
     if (confirm("¿Estás seguro de que deseas resetear el catálogo a la plantilla por defecto? Esto borrará tus variedades actuales para cargar las nuevas.")) {
-      setProduct(createMigaTemplate());
+      updateProduct(createMigaTemplate());
     }
   };
 
@@ -79,9 +116,9 @@ export function ProductBuilder({ customInputs = [] }) {
       return total + (insumo ? insumo.costPerUnit * item.quantity : 0);
     }, 0);
 
-  const openRecipeModal = (varId, pres) => {
-    setActivePresentation({ varId, pres });
-    setTempRecipe([...pres.recipe]);
+  const openRecipeModal = (varId, pres, recipeKey = "recipe", subName = "") => {
+    setActivePresentation({ varId, pres, recipeKey, subName });
+    setTempRecipe([...(pres[recipeKey] || [])]);
   };
 
   const addInsumoToRecipe = () => {
@@ -100,11 +137,23 @@ export function ProductBuilder({ customInputs = [] }) {
 
   const saveRecipe = () => {
     if (!product || !activePresentation) return;
+    const { varId, pres, recipeKey } = activePresentation;
     const updatedVarieties = product.varieties.map((v) => {
-      if (v.id !== activePresentation.varId) return v;
-      return { ...v, presentations: v.presentations.map((p) => p.id === activePresentation.pres.id ? { ...p, recipe: tempRecipe } : p) };
+      if (v.id !== varId) return v;
+      const isDocena = pres.name === "Docena";
+      return {
+        ...v,
+        presentations: v.presentations.map((p) => {
+          if (p.id === pres.id) return { ...p, [recipeKey]: tempRecipe };
+          if (isDocena) {
+            if (p.name === "Media Docena") return { ...p, [recipeKey]: tempRecipe.map((ing) => ({ ...ing, quantity: ing.quantity / 2 })) };
+            if (p.name === "Plancha de 3") return { ...p, [recipeKey]: tempRecipe.map((ing) => ({ ...ing, quantity: ing.quantity / 4 })) };
+          }
+          return p;
+        })
+      };
     });
-    setProduct({ ...product, varieties: updatedVarieties });
+    updateProduct({ ...product, varieties: updatedVarieties });
     setActivePresentation(null);
   };
 
@@ -115,7 +164,7 @@ export function ProductBuilder({ customInputs = [] }) {
       if (v.id !== varId) return v;
       return { ...v, presentations: v.presentations.map((p) => p.id === presId ? { ...p, [field]: safeValue } : p) };
     });
-    setProduct({ ...product, varieties: updatedVarieties });
+    updateProduct({ ...product, varieties: updatedVarieties });
   };
 
   const startEditPrice = (varId, presId, currentPrice) => {
@@ -147,17 +196,19 @@ export function ProductBuilder({ customInputs = [] }) {
     const templatePresentations = product.varieties.length > 0
       ? product.varieties[0].presentations.map((p) => {
           let price = 0;
+          let scale = 1;
           if (p.name === "Docena") price = nonNegative(newVarPrices.docena);
-          else if (p.name === "Media Docena") price = nonNegative(newVarPrices.media);
-          else if (p.name === "Plancha de 3") price = nonNegative(newVarPrices.plancha);
-          return { id: rnd(), name: p.name, price, recipe: [...recipe] };
+          else if (p.name === "Media Docena") { price = nonNegative(newVarPrices.media); scale = 0.5; }
+          else if (p.name === "Plancha de 3") { price = nonNegative(newVarPrices.plancha); scale = 0.25; }
+          const scaledRecipe = recipe.map((r) => ({ ...r, quantity: r.quantity * scale }));
+          return { id: rnd(), name: p.name, price, recipe: scaledRecipe, recipe2: [] };
         })
       : [
-          { id: rnd(), name: "Docena", price: nonNegative(newVarPrices.docena), recipe: [...recipe] },
-          { id: rnd(), name: "Media Docena", price: nonNegative(newVarPrices.media), recipe: [...recipe] },
-          { id: rnd(), name: "Plancha de 3", price: nonNegative(newVarPrices.plancha), recipe: [...recipe] },
+          { id: rnd(), name: "Docena", price: nonNegative(newVarPrices.docena), recipe: [...recipe], recipe2: [] },
+          { id: rnd(), name: "Media Docena", price: nonNegative(newVarPrices.media), recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.5 })), recipe2: [] },
+          { id: rnd(), name: "Plancha de 3", price: nonNegative(newVarPrices.plancha), recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.25 })), recipe2: [] },
         ];
-    setProduct({ ...product, varieties: [...product.varieties, { id: rnd(), name: newVarName.trim(), presentations: templatePresentations }] });
+    updateProduct({ ...product, varieties: [...product.varieties, { id: rnd(), name: newVarName.trim(), presentations: templatePresentations }] });
     setIsAddVarietyOpen(false);
   };
 
@@ -174,20 +225,29 @@ export function ProductBuilder({ customInputs = [] }) {
               <button onClick={() => { setNewVarName(""); setNewVarPrices({ docena: "", media: "", plancha: "" }); setNewVarIngredients([{ insumoId: "", quantity: "" }]); setIsAddVarietyOpen(true); }} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-medium hover:bg-blue-200">
                 <Plus size={18} /> Añadir Variedad
               </button>
-              <button onClick={handleSaveCatalog} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700">
-                <Save size={18} /> Guardar Catálogo
+              <button onClick={handleSaveCatalog} className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-medium transition-colors ${hasUnsavedChanges ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-600 hover:bg-green-700'}`}>
+                <Save size={18} /> {hasUnsavedChanges ? "Guardar Catálogo *" : "Guardar Catálogo"}
               </button>
             </div>
           </div>
 
           <div className="p-6 space-y-8">
-            {product.varieties.map((variety) => (
+            {product.varieties.map((variety) => {
+              const nameLower = variety.name.toLowerCase();
+              const isJamonSalame = (nameLower.includes("jamón") || nameLower.includes("jamon")) && nameLower.includes("salame");
+              const isBondiolaCrudo = nameLower.includes("bondiola") && nameLower.includes("crudo");
+              const isCombined = isJamonSalame || isBondiolaCrudo;
+              const name1 = isJamonSalame ? "Jamón" : isBondiolaCrudo ? "Bondiola" : "";
+              const name2 = isJamonSalame ? "Salame" : isBondiolaCrudo ? "Crudo" : "";
+
+              return (
               <div key={variety.id} className="border border-gray-200 rounded-xl overflow-hidden">
                 <div className="bg-blue-50/50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                   <h3 className="font-bold text-blue-900 text-lg">{variety.name}</h3>
                   <button onClick={() => handleDeleteVariety(variety.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
                 </div>
                 <div className="overflow-x-auto">
+                  {isCombined && <h4 className="px-4 py-2 text-sm font-bold text-gray-700 bg-gray-50 border-b border-gray-200">Precios y Costos ({name1})</h4>}
                   <table className="w-full text-left">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
@@ -200,7 +260,7 @@ export function ProductBuilder({ customInputs = [] }) {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {variety.presentations.map((pres) => {
-                        const cost = calculateRecipeCost(pres.recipe);
+                        const cost = calculateRecipeCost(pres.recipe || []);
                         const margin = pres.price > 0 ? ((pres.price - cost) / pres.price) * 100 : 0;
                         const editing = isEditing(variety.id, pres.id);
                         return (
@@ -246,8 +306,8 @@ export function ProductBuilder({ customInputs = [] }) {
                               )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <button onClick={() => openRecipeModal(variety.id, pres)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">
-                                <Settings2 size={16} /> Configurar Costos
+                              <button onClick={() => openRecipeModal(variety.id, pres, 'recipe', name1)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">
+                                <Settings2 size={16} /> Configurar Costos {isCombined ? name1 : ""}
                               </button>
                             </td>
                           </tr>
@@ -256,8 +316,52 @@ export function ProductBuilder({ customInputs = [] }) {
                     </tbody>
                   </table>
                 </div>
+
+                {isCombined && (
+                  <div className="overflow-x-auto border-t border-gray-200">
+                    <h4 className="px-4 py-2 text-sm font-bold text-gray-700 bg-gray-50 border-b border-gray-200">Costos ({name2})</h4>
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-600">Presentación</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-600 w-40">Precio ($)</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-600">Costo Calculado</th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center w-28"></th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-right">Insumos (Receta)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {variety.presentations.map((pres) => {
+                          const cost = calculateRecipeCost(pres.recipe2 || []);
+                          const margin = pres.price > 0 ? ((pres.price - cost) / pres.price) * 100 : 0;
+                          return (
+                            <tr key={pres.id + '-2'} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 font-medium text-gray-900">{pres.name}</td>
+                              <td className="px-4 py-3">
+                                <span className="font-semibold text-gray-500">${pres.price.toFixed(2)}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-gray-900">${cost.toFixed(2)}</span>
+                                  {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 40 ? "text-green-600" : "text-red-500"}`}>Margen: {margin.toFixed(1)}%</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center"></td>
+                              <td className="px-4 py-3 text-right">
+                                <button onClick={() => openRecipeModal(variety.id, pres, 'recipe2', name2)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">
+                                  <Settings2 size={16} /> Configurar Costos {name2}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -267,8 +371,10 @@ export function ProductBuilder({ customInputs = [] }) {
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
               <div>
-                <h3 className="font-bold text-gray-900 flex items-center gap-2"><Calculator className="text-blue-600" size={20} /> Receta e Insumos</h3>
-                <p className="text-sm text-gray-500 mt-1">Para: {activePresentation.pres.name}</p>
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <Calculator className="text-blue-600" size={20} /> Receta e Insumos {activePresentation?.subName ? `(${activePresentation.subName})` : ""}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">Para: {activePresentation?.pres?.name}</p>
               </div>
               <button onClick={() => setActivePresentation(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>

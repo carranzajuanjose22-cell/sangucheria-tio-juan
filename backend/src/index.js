@@ -16,6 +16,7 @@ const inputRoutes = require('./routes/inputRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
+const storeRoutes = require('./routes/storeRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,7 @@ app.use('/api/inputs', inputRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/catalog', catalogRoutes);
+app.use('/api/store', storeRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error('\n❌ ERROR INTERNO DEL SERVIDOR:', err);

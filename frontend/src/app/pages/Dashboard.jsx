@@ -31,30 +31,19 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem("register_state");
-      if (saved) setRegisterState(JSON.parse(saved));
-      else setRegisterState(null);
+    const load = async () => {
+      const saved = await api.get("/store/register_state").catch(() => null);
+      setRegisterState(saved);
     };
     load();
-    const interval = setInterval(load, 2000);
+    const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem("pos_sales");
-      if (saved) setSales(JSON.parse(saved));
-    };
-    load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const load = () => {
-      const saved = localStorage.getItem("pos_expenses");
-      if (saved) setExpenses(JSON.parse(saved));
+    const load = async () => {
+      const saved = await api.get("/store/pos_sales").catch(() => []);
+      setSales(saved || []);
     };
     load();
     const interval = setInterval(load, 5000);
@@ -62,9 +51,19 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const loadRegisters = () => {
-      const savedRegisters = localStorage.getItem("pos_registers");
-      if (savedRegisters) setRegisters(JSON.parse(savedRegisters));
+    const load = async () => {
+      const saved = await api.get("/store/pos_expenses").catch(() => []);
+      setExpenses(saved || []);
+    };
+    load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const loadRegisters = async () => {
+      const savedRegisters = await api.get("/store/pos_registers").catch(() => []);
+      setRegisters(savedRegisters || []);
     };
     loadRegisters();
     const interval = setInterval(loadRegisters, 5000);
@@ -77,43 +76,51 @@ export function Dashboard() {
       .catch(() => {});
   }, []);
 
-  const handleOpenRegister = () => {
-    const cashAmount = nonNegative(initialCashInput);
-    const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
-    localStorage.setItem("register_state", JSON.stringify(newState));
-    setRegisterState(newState);
-    setInitialCashInput("");
-    setModalState("none");
+  const handleOpenRegister = async () => {
+    try {
+      const cashAmount = nonNegative(initialCashInput);
+      const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
+      await api.post("/store/register_state", newState);
+      setRegisterState(newState);
+      setInitialCashInput("");
+      setModalState("none");
+    } catch (err) {
+      alert("Error de conexión. Asegúrate de haber ejecutado 'npm run db:push' en el backend.");
+    }
   };
 
-  const handleCloseRegister = () => {
+  const handleCloseRegister = async () => {
     if (!registerState) return;
-    const existingSales = JSON.parse(localStorage.getItem("pos_sales") || "[]");
-    const existingExpenses = JSON.parse(localStorage.getItem("pos_expenses") || "[]");
-    const closeRecord = {
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString(),
-      totalSalesCount: existingSales.length,
-      totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
-      totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
-      employee: userName,
-      closedBy: userName,
-      openedBy: registerState.openedBy,
-      registerNumber: "Caja 01",
-      sales: existingSales,
-      expenses: existingExpenses,
-      initialCash: registerState.initialCash,
-      openedAt: registerState.openedAt,
-    };
-    const existingRegisters = JSON.parse(localStorage.getItem("pos_registers") || "[]");
-    localStorage.setItem("pos_registers", JSON.stringify([closeRecord, ...existingRegisters]));
-    localStorage.removeItem("register_state");
-    localStorage.removeItem("pos_sales");
-    localStorage.removeItem("pos_expenses");
-    setRegisterState(null);
-    setSales([]);
-    setExpenses([]);
-    setModalState("closeSuccess");
+    try {
+      const existingSales = await api.get("/store/pos_sales").catch(() => []) || [];
+      const existingExpenses = await api.get("/store/pos_expenses").catch(() => []) || [];
+      const closeRecord = {
+        id: Math.random().toString(36).substr(2, 9),
+        date: new Date().toISOString(),
+        totalSalesCount: existingSales.length,
+        totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
+        totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
+        employee: userName,
+        closedBy: userName,
+        openedBy: registerState.openedBy,
+        registerNumber: "Caja 01",
+        sales: existingSales,
+        expenses: existingExpenses,
+        initialCash: registerState.initialCash,
+        openedAt: registerState.openedAt,
+      };
+      const existingRegisters = await api.get("/store/pos_registers").catch(() => []) || [];
+      await api.post("/store/pos_registers", [closeRecord, ...existingRegisters]);
+      await api.post("/store/register_state", null);
+      await api.post("/store/pos_sales", []);
+      await api.post("/store/pos_expenses", []);
+      setRegisterState(null);
+      setSales([]);
+      setExpenses([]);
+      setModalState("closeSuccess");
+    } catch (err) {
+      alert("Error al cerrar la caja. Revisa tu conexión a internet.");
+    }
   };
 
   const currentDate = currentTime.toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });

@@ -45,4 +45,9 @@ const catalog = sqliteTable('Catalog', {
   actualizado: text('actualizado').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-module.exports = { users, inputItems, services, paymentMethods, catalog };
+const cloud_store = sqliteTable('cloud_store', {
+  key: text('key').primaryKey(),
+  value: text('value'),
+});
+
+module.exports = { users, inputItems, services, paymentMethods, catalog, cloud_store };
