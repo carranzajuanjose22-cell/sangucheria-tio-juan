@@ -99,6 +99,7 @@ async function initDb() {
 }
 
 if (process.env.VERCEL) {
+  ensureTables().catch((err) => console.error('❌ Error al verificar tablas en Vercel:', err));
   module.exports = app;
 } else {
   initDb().then(() => {
