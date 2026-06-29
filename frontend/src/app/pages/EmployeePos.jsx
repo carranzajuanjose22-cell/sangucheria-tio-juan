@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
-import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard } from "lucide-react";
+import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow } from "lucide-react";
 import { api } from "./api.js";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import { usePosStore } from "../hooks/usePosStore.js";
+import { closeRegister, appendSale } from "../utils/register.js";
 
 export function EmployeePos() {
   const location = useLocation();
@@ -23,18 +25,21 @@ export function EmployeePos() {
   const [payments, setPayments] = useState([]);
   const [modalState, setModalState] = useState("none");
   const [lastSale, setLastSale] = useState(null);
-  const [registerState, setRegisterState] = useState(null);
   const [initialCashInput, setInitialCashInput] = useState("");
-  const [sales, setSales] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const {
+    register_state: registerState,
+    pos_sales: sales,
+    pos_expenses: expenses,
+    pos_pending_orders: pendingOrders,
+    refresh: refreshPosStore,
+  } = usePosStore();
   const [expenseDesc, setExpenseDesc] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [migaMatrix, setMigaMatrix] = useState([]);
-  const [otherProducts, setOtherProducts] = useState([]);
+  const [otherProducts] = useState([]);
   const [migaTitle, setMigaTitle] = useState("Sándwiches de Miga");
   const [migaHeaders, setMigaHeaders] = useState(["Docena", "Media Docena", "Plancha de 3"]);
   const [migaOptionModal, setMigaOptionModal] = useState(false);
-  const [pendingOrders, setPendingOrders] = useState([]);
   const [payingOrder, setPayingOrder] = useState(null);
   const [pendingMigaProduct, setPendingMigaProduct] = useState(null);
   const [customNote, setCustomNote] = useState("");
@@ -45,16 +50,8 @@ export function EmployeePos() {
   const [inputs, setInputs] = useState([]);
   const [eggCount, setEggCount] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(null);
-
-  useEffect(() => {
-    const load = async () => {
-      const saved = await api.get("/store/register_state").catch(() => null);
-      setRegisterState(saved);
-    };
-    load();
-    const interval = setInterval(load, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const [unitSaleModal, setUnitSaleModal] = useState(null); // Para venta por unidad
+  const [unitQuantity, setUnitQuantity] = useState(1);
 
   useEffect(() => {
     const loadInputs = async () => {
@@ -101,65 +98,31 @@ export function EmployeePos() {
       setMigaHeaders(headers);
       setMigaMatrix(parsed.varieties.map((v) => {
         const presObj = {};
-        v.presentations.forEach((p) => { presObj[p.name] = { id: p.id, name: `${p.name} de ${v.name}`, price: p.price || 0 }; });
-        return { variety: v.name, presentations: presObj };
+        v.presentations.forEach((p) => { presObj[p.name] = { ...p, name: `${p.name} de ${v.name}` }; });
+        return { variety: v.name, presentations: presObj, varietyData: v };
       }));
     };
 
-    const loadMiga = () => {
-      const savedProduct = localStorage.getItem("pos_miga_product");
-      if (savedProduct) applyMigaData(JSON.parse(savedProduct));
-    };
-
-    // Carga inicial: primero localStorage, luego API como fallback
-    const initMiga = async () => {
-      const savedProduct = localStorage.getItem("pos_miga_product");
-      if (savedProduct) {
-        applyMigaData(JSON.parse(savedProduct));
-      } else {
-        try {
-          const data = await api.get("/catalog/MIGA");
-          if (data) {
-            localStorage.setItem("pos_miga_product", JSON.stringify(data));
-            applyMigaData(data);
-          }
-        } catch {}
+    const loadMigaFromApi = async () => {
+      try {
+        const data = await api.get("/catalog/MIGA");
+        if (!data) return;
+        localStorage.setItem("pos_miga_product", JSON.stringify(data));
+        applyMigaData(data);
+      } catch {
+        const savedProduct = localStorage.getItem("pos_miga_product");
+        if (savedProduct) applyMigaData(JSON.parse(savedProduct));
       }
     };
 
-    initMiga();
-    const interval = setInterval(loadMiga, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      const saved = await api.get("/store/pos_sales").catch(() => []);
-      setSales(saved || []);
+    loadMigaFromApi();
+    const interval = setInterval(loadMigaFromApi, 30000);
+    const onCatalogUpdate = () => loadMigaFromApi();
+    window.addEventListener("catalog-updated", onCatalogUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("catalog-updated", onCatalogUpdate);
     };
-    load();
-    const interval = setInterval(load, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      const saved = await api.get("/store/pos_expenses").catch(() => []);
-      setExpenses(saved || []);
-    };
-    load();
-    const interval = setInterval(load, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      const saved = await api.get("/store/pos_pending_orders").catch(() => []);
-      setPendingOrders(saved || []);
-    };
-    load();
-    const interval = setInterval(load, 3000);
-    return () => clearInterval(interval);
   }, []);
 
   const currentDate = new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -176,6 +139,29 @@ export function EmployeePos() {
       return [...current, { ...product, quantity: 1 }];
     });
   };
+
+  const handleVarietyClick = (variety, presentationName) => {
+    if (isRegisterClosed) return;
+
+    const nameLower = variety.name.toLowerCase();
+    const hasUnitPrice = typeof variety.unitPrice === 'number' && variety.unitPrice > 0;
+    const isSpecialVariety = nameLower.includes("paleta") || nameLower.includes("pebete");
+
+    if (hasUnitPrice && isSpecialVariety) {
+      setUnitQuantity(1);
+      setUnitSaleModal(variety);
+    } else {
+      const product = variety.presentations.find(p => p.name === presentationName);
+      if (product) {
+        setPendingMigaProduct({ ...product, name: `${product.name} de ${variety.name}` });
+        setCustomNote("");
+        setEggCount(0);
+        setSelectedVariant(null);
+        setMigaOptionModal(true);
+      }
+    }
+  };
+
 
   const handleConfirmMigaOption = (option) => {
     if (pendingMigaProduct) {
@@ -195,6 +181,22 @@ export function EmployeePos() {
     setMigaOptionModal(false);
     setPendingMigaProduct(null);
   };
+
+  const addUnitToCart = () => {
+    if (!unitSaleModal || unitQuantity <= 0) return;
+    const { name, unitPrice } = unitSaleModal;
+    const cartId = `unit-${unitSaleModal.id}`;
+    const item = {
+      id: cartId,
+      name: `${name} (Unidad)`,
+      price: unitPrice,
+      quantity: 1, // La cantidad se maneja en el wrapper addToCart
+    };
+    // Usamos el mismo addToCart, pero con la cantidad deseada
+    setCart(current => [...current, { ...item, quantity: unitQuantity }]);
+    setUnitSaleModal(null);
+  };
+
 
   const updateQuantity = (id, delta) => {
     setCart((current) => current.map((item) => item.id === id ? { ...item, quantity: Math.max(item.quantity + delta, 0) } : item).filter((item) => item.quantity > 0));
@@ -236,7 +238,7 @@ export function EmployeePos() {
     try {
       const updated = [...pendingOrders, newOrder];
       await api.post("/store/pos_pending_orders", updated);
-      setPendingOrders(updated);
+      await refreshPosStore();
       setCart([]);
       setCustomerName("");
       setAdvanceNote("");
@@ -273,7 +275,7 @@ export function EmployeePos() {
     try {
       const updated = pendingOrders.filter(o => o.id !== id);
       await api.post("/store/pos_pending_orders", updated);
-      setPendingOrders(updated);
+      await refreshPosStore();
     } catch (err) {
       alert("Error al entregar la orden.");
     }
@@ -284,7 +286,7 @@ export function EmployeePos() {
       try {
         const updated = pendingOrders.filter(o => o.id !== id);
         await api.post("/store/pos_pending_orders", updated);
-        setPendingOrders(updated);
+        await refreshPosStore();
       } catch (err) {
         alert("Error al descartar la orden.");
       }
@@ -313,10 +315,7 @@ export function EmployeePos() {
     const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
     const newSale = { id: payingOrder.id, date: new Date().toISOString(), items: [...payingOrder.items], total, paymentMethod: paymentMethodStr, payments: finalPayments, employee: userName, registerNumber: "Caja 01" };
     try {
-      const existingSales = await api.get("/store/pos_sales").catch(() => []) || [];
-      const updatedSales = [...existingSales, newSale];
-      await api.post("/store/pos_sales", updatedSales);
-      setSales(updatedSales);
+      await appendSale(newSale);
       setLastSale(newSale);
 
       if (payingOrder.keepInPrep) {
@@ -327,12 +326,12 @@ export function EmployeePos() {
         };
         const updatedPending = [...pendingOrders, newPrepOrder];
         await api.post("/store/pos_pending_orders", updatedPending);
-        setPendingOrders(updatedPending);
       } else {
         const updatedPending = pendingOrders.filter(o => o.id !== payingOrder.id);
         await api.post("/store/pos_pending_orders", updatedPending);
-        setPendingOrders(updatedPending);
       }
+
+      await refreshPosStore();
 
     if (payingOrder.isDirectCharge) {
       setCart([]);
@@ -345,7 +344,7 @@ export function EmployeePos() {
     setPayingOrder(null);
     setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
     } catch (err) {
-      alert("Error al registrar la venta. Revisa la conexión.");
+      alert(err.message || "Error al registrar la venta. Revisa la conexión.");
     }
   };
 
@@ -354,11 +353,11 @@ export function EmployeePos() {
       const cashAmount = nonNegative(initialCashInput);
       const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
       await api.post("/store/register_state", newState);
-      setRegisterState(newState);
+      await refreshPosStore();
       setInitialCashInput("");
       setModalState("none");
     } catch (err) {
-      alert("Error de conexión. Asegúrate de haber ejecutado 'npm run db:push' en el backend.");
+      alert(err.message || "Error de conexión. Revisá tu conexión a internet.");
     }
   };
 
@@ -370,7 +369,7 @@ export function EmployeePos() {
       const existingExpenses = await api.get("/store/pos_expenses").catch(() => []) || [];
       const updatedExpenses = [...existingExpenses, newExpense];
       await api.post("/store/pos_expenses", updatedExpenses);
-      setExpenses(updatedExpenses);
+      await refreshPosStore();
       setExpenseDesc(""); setExpenseAmount(""); setModalState("none");
     } catch (err) {
       alert("Error al registrar el gasto.");
@@ -380,25 +379,11 @@ export function EmployeePos() {
   const handleCloseRegister = async () => {
     if (!registerState) return;
     try {
-      const existingSales = await api.get("/store/pos_sales").catch(() => []) || [];
-      const existingExpenses = await api.get("/store/pos_expenses").catch(() => []) || [];
-      const closeRecord = {
-        id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(),
-        totalSalesCount: existingSales.length,
-        totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
-        totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
-        employee: userName, closedBy: userName, openedBy: registerState.openedBy, registerNumber: "Caja 01",
-        sales: existingSales, expenses: existingExpenses,
-        initialCash: registerState.initialCash, openedAt: registerState.openedAt,
-      };
-      const existingRegisters = await api.get("/store/pos_registers").catch(() => []) || [];
-      await api.post("/store/pos_registers", [closeRecord, ...existingRegisters]);
-      await api.post("/store/register_state", null);
-      await api.post("/store/pos_sales", []);
-      await api.post("/store/pos_expenses", []);
-      setRegisterState(null); setSales([]); setExpenses([]); setModalState("closeSuccess");
+      await closeRegister({ employee: userName, closedBy: userName });
+      await refreshPosStore();
+      setModalState("closeSuccess");
     } catch (err) {
-      alert("Error al cerrar la caja. Revisa tu conexión a internet.");
+      alert(err.message || "Error al cerrar la caja. Revisá tu conexión a internet.");
     }
   };
 
@@ -454,6 +439,7 @@ export function EmployeePos() {
                         <th className="px-4 py-3 text-sm font-bold text-gray-700 border-r border-gray-200">Variedad</th>
                         {migaHeaders.map((header) => <th key={header} className="px-4 py-3 text-sm font-bold text-gray-700 text-center border-r border-gray-200 last:border-0">{header}</th>)}
                       </tr>
+                      {/* El thead se genera dinámicamente en el componente que no está aquí */}
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {filteredMiga.map((row, idx) => (
@@ -462,6 +448,9 @@ export function EmployeePos() {
                           {migaHeaders.map((pres) => {
                             const product = row.presentations[pres];
                             if (!product) return <td key={pres} className="px-2 py-2 border-r border-gray-200 last:border-0"></td>;
+                            const presentation = row.presentations[pres];
+                            const fullVariety = migaMatrix.find(m => m.variety === row.variety)?.varietyData;
+
                             return (
                               <td key={pres} className="px-2 py-2 border-r border-gray-200 last:border-0 align-middle">
                                 <button
@@ -472,6 +461,8 @@ export function EmployeePos() {
                                     setEggCount(0);
                                     setSelectedVariant(null);
                                     setMigaOptionModal(true);
+                                    if (fullVariety) {
+                                      handleVarietyClick(fullVariety, pres);
                                     }
                                   }}
                                   disabled={isRegisterClosed}
@@ -1114,6 +1105,62 @@ export function EmployeePos() {
               >
                 Confirmar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {unitSaleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <AppWindow className="text-blue-600" size={20} /> Seleccionar Opción de Venta
+              </h3>
+              <button onClick={() => setUnitSaleModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="p-6">
+              <p className="text-center text-lg font-semibold mb-6">¿Cómo deseas vender <span className="text-blue-600">{unitSaleModal.name}</span>?</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Opción por Unidad */}
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex flex-col items-center justify-center">
+                  <h4 className="font-bold text-blue-800 text-lg mb-3">Por Unidad</h4>
+                  <p className="text-3xl font-black text-blue-900 mb-4">${(unitSaleModal.unitPrice || 0).toFixed(2)}</p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setUnitQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 bg-blue-200 text-blue-800 rounded-full font-bold">-</button>
+                    <input
+                      type="number"
+                      value={unitQuantity}
+                      onChange={(e) => setUnitQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 text-center font-bold text-lg bg-transparent border-b-2 border-blue-300 focus:outline-none"
+                    />
+                    <button onClick={() => setUnitQuantity(q => q + 1)} className="w-8 h-8 bg-blue-200 text-blue-800 rounded-full font-bold">+</button>
+                  </div>
+                  <button onClick={addUnitToCart} className="mt-5 w-full bg-blue-600 text-white font-medium py-2 rounded-lg hover:bg-blue-700">
+                    Agregar {unitQuantity} {unitQuantity > 1 ? 'unidades' : 'unidad'}
+                  </button>
+                </div>
+
+                {/* Opciones por Presentación */}
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <h4 className="font-bold text-gray-800 text-lg mb-3 text-center">Por Presentación</h4>
+                  <div className="space-y-2">
+                    {unitSaleModal.presentations.map(pres => (
+                      <button
+                        key={pres.id}
+                        onClick={() => {
+                          handleVarietyClick(unitSaleModal, pres.name); // Reutiliza la lógica para abrir el modal de opciones
+                          setUnitSaleModal(null);
+                        }}
+                        className="w-full flex justify-between items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 hover:border-gray-400"
+                      >
+                        <span className="font-medium">{pres.name}</span>
+                        <span className="font-bold text-gray-800">${pres.price.toFixed(2)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

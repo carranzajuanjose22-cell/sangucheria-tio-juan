@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Receipt, ShoppingCart, Clock, Lock, Unlock, X, CheckCircle2, Eye } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 import { api } from "./api.js";
+import { usePosStore } from "../hooks/usePosStore.js";
+import { closeRegister } from "../utils/register.js";
 
 export function Dashboard() {
   const userName = (() => {
@@ -16,48 +18,22 @@ export function Dashboard() {
   })();
 
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [sales, setSales] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [registerState, setRegisterState] = useState(null);
   const [modalState, setModalState] = useState("none");
   const [initialCashInput, setInitialCashInput] = useState("");
   const [registers, setRegisters] = useState([]);
   const [services, setServices] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const {
+    register_state: registerState,
+    pos_sales: sales,
+    pos_expenses: expenses,
+    pos_pending_orders: pendingOrders,
+    refresh: refreshPosStore,
+  } = usePosStore();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      const saved = await api.get("/store/register_state").catch(() => null);
-      setRegisterState(saved);
-    };
-    load();
-    const interval = setInterval(load, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      const saved = await api.get("/store/pos_sales").catch(() => []);
-      setSales(saved || []);
-    };
-    load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      const saved = await api.get("/store/pos_expenses").catch(() => []);
-      setExpenses(saved || []);
-    };
-    load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -66,7 +42,7 @@ export function Dashboard() {
       setRegisters(savedRegisters || []);
     };
     loadRegisters();
-    const interval = setInterval(loadRegisters, 5000);
+    const interval = setInterval(loadRegisters, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -81,45 +57,24 @@ export function Dashboard() {
       const cashAmount = nonNegative(initialCashInput);
       const newState = { isOpen: true, initialCash: cashAmount, openedAt: new Date().toISOString(), openedBy: userName };
       await api.post("/store/register_state", newState);
-      setRegisterState(newState);
+      await refreshPosStore();
       setInitialCashInput("");
       setModalState("none");
     } catch (err) {
-      alert("Error de conexión. Asegúrate de haber ejecutado 'npm run db:push' en el backend.");
+      alert(err.message || "Error de conexión. Revisá tu conexión a internet.");
     }
   };
 
   const handleCloseRegister = async () => {
     if (!registerState) return;
     try {
-      const existingSales = await api.get("/store/pos_sales").catch(() => []) || [];
-      const existingExpenses = await api.get("/store/pos_expenses").catch(() => []) || [];
-      const closeRecord = {
-        id: Math.random().toString(36).substr(2, 9),
-        date: new Date().toISOString(),
-        totalSalesCount: existingSales.length,
-        totalIncome: existingSales.reduce((acc, sale) => acc + sale.total, 0),
-        totalExpenses: existingExpenses.reduce((acc, exp) => acc + exp.amount, 0),
-        employee: userName,
-        closedBy: userName,
-        openedBy: registerState.openedBy,
-        registerNumber: "Caja 01",
-        sales: existingSales,
-        expenses: existingExpenses,
-        initialCash: registerState.initialCash,
-        openedAt: registerState.openedAt,
-      };
-      const existingRegisters = await api.get("/store/pos_registers").catch(() => []) || [];
-      await api.post("/store/pos_registers", [closeRecord, ...existingRegisters]);
-      await api.post("/store/register_state", null);
-      await api.post("/store/pos_sales", []);
-      await api.post("/store/pos_expenses", []);
-      setRegisterState(null);
-      setSales([]);
-      setExpenses([]);
+      await closeRegister({ employee: userName, closedBy: userName });
+      await refreshPosStore();
+      const savedRegisters = await api.get("/store/pos_registers").catch(() => []);
+      setRegisters(savedRegisters || []);
       setModalState("closeSuccess");
     } catch (err) {
-      alert("Error al cerrar la caja. Revisa tu conexión a internet.");
+      alert(err.message || "Error al cerrar la caja. Revisá tu conexión a internet.");
     }
   };
 
@@ -290,6 +245,14 @@ export function Dashboard() {
               <button onClick={() => setModalState("none")} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="p-6">
+              {pendingOrders.length > 0 && (
+                <div className="mb-5 bg-red-50 border border-red-300 rounded-xl p-4">
+                  <p className="font-bold text-red-700 text-sm">No se puede cerrar la caja</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    Hay <strong>{pendingOrders.length} pedido{pendingOrders.length > 1 ? "s" : ""} en preparación</strong> sin resolver.
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col items-center justify-center mb-6">
                 <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-3"><Lock size={32} /></div>
                 <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
@@ -304,8 +267,20 @@ export function Dashboard() {
               </div>
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3">
-              <button onClick={() => setModalState("none")} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleCloseRegister} className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700">Cerrar Caja</button>
+              <button onClick={() => setModalState("none")} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">
+                {pendingOrders.length > 0 ? "Volver" : "Cancelar"}
+              </button>
+              <button
+                onClick={handleCloseRegister}
+                disabled={pendingOrders.length > 0}
+                className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
+                  pendingOrders.length > 0
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }`}
+              >
+                Cerrar Caja
+              </button>
             </div>
           </div>
         </div>

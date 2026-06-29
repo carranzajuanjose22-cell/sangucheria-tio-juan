@@ -1,34 +1,50 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
-const { cloud_store } = require('../models/schema');
-const { eq } = require('drizzle-orm');
+const { authMiddleware } = require('../middleware/auth');
+const storeService = require('../services/storeService');
+
+router.use(authMiddleware);
+
+router.post('/operations/close-register', async (req, res) => {
+  try {
+    const { employee, closedBy } = req.body || {};
+    const closeRecord = await storeService.closeRegister({ employee, closedBy });
+    res.json({ success: true, closeRecord });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+router.post('/operations/append-sale', async (req, res) => {
+  try {
+    const { sale } = req.body || {};
+    if (!sale?.id) {
+      return res.status(400).json({ error: 'Venta inválida' });
+    }
+    const result = await storeService.appendToArray('pos_sales', sale);
+    res.json({ success: true, sales: result.items, duplicate: result.duplicate });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
 
 router.get('/:key', async (req, res) => {
   try {
-    const result = await db.select().from(cloud_store).where(eq(cloud_store.key, req.params.key));
-    if (result.length > 0 && result[0].value) {
-      res.json(JSON.parse(result[0].value));
-    } else {
-      res.json(null);
-    }
+    const value = await storeService.getValue(req.params.key);
+    res.json(value);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 
 router.post('/:key', async (req, res) => {
   try {
-    const value = JSON.stringify(req.body);
-    const existing = await db.select().from(cloud_store).where(eq(cloud_store.key, req.params.key));
-    if (existing.length > 0) {
-      await db.update(cloud_store).set({ value }).where(eq(cloud_store.key, req.params.key));
-    } else {
-      await db.insert(cloud_store).values({ key: req.params.key, value });
-    }
+    await storeService.setValue(req.params.key, req.body);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.status || 500).json({ error: error.message });
   }
 });
 

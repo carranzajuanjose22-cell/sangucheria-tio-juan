@@ -1,4 +1,6 @@
-const API_URL = "https://sangucheria-tio-juan.vercel.app/api";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "/api" : "https://sangucheria-tio-juan.vercel.app/api");
 
 function getToken() {
   return localStorage.getItem("pos_token");
@@ -8,7 +10,7 @@ function getAuthHeaders() {
   const token = getToken();
   return {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {},
   };
 }
 
@@ -18,69 +20,43 @@ function handleSessionExpired() {
   window.location.href = "/";
 }
 
+async function request(method, endpoint, data) {
+  const options = {
+    method,
+    headers: getAuthHeaders(),
+  };
+
+  if (data !== undefined) {
+    options.body = JSON.stringify(data);
+  }
+
+  let response;
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, options);
+  } catch {
+    throw new Error("No se pudo conectar con el servidor. Revisá tu conexión a internet.");
+  }
+
+  if (response.status === 401 && endpoint !== "/auth/login") {
+    handleSessionExpired();
+    throw new Error("Sesión expirada");
+  }
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => null);
+    throw new Error(errData?.error || `Error en la petición ${method}`);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}
+
 export const api = {
-  get: async (endpoint) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      headers: getAuthHeaders(),
-    });
-    if (response.status === 401) {
-      handleSessionExpired();
-      throw new Error("Sesión expirada");
-    }
-    if (!response.ok) {
-      const errData = await response.json().catch(() => null);
-      throw new Error(errData?.error || "Error en la petición GET");
-    }
-    return response.json();
-  },
-
-  post: async (endpoint, data) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (response.status === 401 && endpoint !== "/auth/login") {
-      handleSessionExpired();
-      throw new Error("Sesión expirada");
-    }
-    if (!response.ok) {
-      const errData = await response.json().catch(() => null);
-      throw new Error(errData?.error || "Error de red o el backend está apagado");
-    }
-    return response.json();
-  },
-
-  put: async (endpoint, data) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (response.status === 401) {
-      handleSessionExpired();
-      throw new Error("Sesión expirada");
-    }
-    if (!response.ok) {
-      const errData = await response.json().catch(() => null);
-      throw new Error(errData?.error || "Error en la petición PUT");
-    }
-    return response.json();
-  },
-
-  delete: async (endpoint) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: "DELETE",
-      headers: getAuthHeaders(),
-    });
-    if (response.status === 401) {
-      handleSessionExpired();
-      throw new Error("Sesión expirada");
-    }
-    if (!response.ok) {
-      const errData = await response.json().catch(() => null);
-      throw new Error(errData?.error || "Error en la petición DELETE");
-    }
-    return response.json();
-  },
+  get: (endpoint) => request("GET", endpoint),
+  post: (endpoint, data) => request("POST", endpoint, data),
+  put: (endpoint, data) => request("PUT", endpoint, data),
+  delete: (endpoint) => request("DELETE", endpoint),
 };
