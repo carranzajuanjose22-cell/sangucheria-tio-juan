@@ -261,7 +261,7 @@ export function ProductBuilder({ customInputs = [] }) {
                     <tbody className="divide-y divide-gray-100">
                       {variety.presentations.map((pres) => {
                         const cost = calculateRecipeCost(pres.recipe || []);
-                        const margin = pres.price > 0 ? ((pres.price - cost) / pres.price) * 100 : 0;
+                        const margin = cost > 0 ? ((pres.price - cost) / cost) * 100 : 0;
                         const editing = isEditing(variety.id, pres.id);
                         return (
                           <tr key={pres.id} className="hover:bg-gray-50">
@@ -286,7 +286,7 @@ export function ProductBuilder({ customInputs = [] }) {
                             <td className="px-4 py-3">
                               <div className="flex flex-col">
                                 <span className="font-bold text-gray-900">${cost.toFixed(2)}</span>
-                                {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 40 ? "text-green-600" : "text-red-500"}`}>Margen: {margin.toFixed(1)}%</span>}
+                                {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 70 ? "text-green-600" : "text-red-500"}`}>Margen: {margin.toFixed(1)}%</span>}
                               </div>
                             </td>
                             <td className="px-4 py-3 text-center">
@@ -333,7 +333,7 @@ export function ProductBuilder({ customInputs = [] }) {
                       <tbody className="divide-y divide-gray-100">
                         {variety.presentations.map((pres) => {
                           const cost = calculateRecipeCost(pres.recipe2 || []);
-                          const margin = pres.price > 0 ? ((pres.price - cost) / pres.price) * 100 : 0;
+                          const margin = cost > 0 ? ((pres.price - cost) / cost) * 100 : 0;
                           return (
                             <tr key={pres.id + '-2'} className="hover:bg-gray-50">
                               <td className="px-4 py-3 font-medium text-gray-900">{pres.name}</td>
@@ -343,7 +343,7 @@ export function ProductBuilder({ customInputs = [] }) {
                               <td className="px-4 py-3">
                                 <div className="flex flex-col">
                                   <span className="font-bold text-gray-900">${cost.toFixed(2)}</span>
-                                  {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 40 ? "text-green-600" : "text-red-500"}`}>Margen: {margin.toFixed(1)}%</span>}
+                                  {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 70 ? "text-green-600" : "text-red-500"}`}>Margen: {margin.toFixed(1)}%</span>}
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-center"></td>

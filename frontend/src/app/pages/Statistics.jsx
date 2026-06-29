@@ -96,9 +96,7 @@ export function Statistics() {
     filteredRegisters.reduce((sum, r) => sum + (r.totalExpenses || 0), 0) +
     filteredCurrentExpenses.reduce((sum, e) => sum + e.amount, 0);
   const monthlyFixedExpenses = services.reduce((sum, s) => sum + (s.cost || 0), 0);
-  let daysToCalculate = dateRange === "today" ? 1 : dateRange === "week" ? 7 : dateRange === "all" ? Math.max(new Set(registers.map((r) => new Date(r.date).toLocaleDateString("es-AR"))).size, 1) : 30;
-  const totalFixedExpenses = (monthlyFixedExpenses / 30) * daysToCalculate;
-  const netBalance = totalRevenue - totalVariableExpenses - totalFixedExpenses - totalPurchases;
+  const netBalance = totalRevenue - totalVariableExpenses - totalPurchases;
   const productsSold = filteredSales.reduce((sum, sale) => sum + sale.items.reduce((s2, item) => s2 + item.quantity, 0), 0);
 
   let totalEfectivo = 0, totalVirtual = 0;
@@ -215,9 +213,6 @@ export function Statistics() {
             <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600">
               <ShoppingCart size={16} /> Ingresar Compra
             </button>
-            <span className="text-sm font-medium text-gray-500 bg-white px-3 py-1.5 border border-gray-200 rounded-lg">
-              {dateRange === "today" ? "Período: Hoy" : dateRange === "week" ? "Período: Últimos 7 días" : dateRange === "month" ? "Período: Últimos 30 días" : `Período: Histórico (${daysToCalculate} días)`}
-            </span>
           </div>
         </div>
         <div className="p-6">
@@ -227,7 +222,6 @@ export function Statistics() {
                 { icon: TrendingUp, label: "Ingresos (Ventas)", value: `$${totalRevenue.toFixed(2)}`, bg: "bg-green-50/50 border-green-100", iconBg: "bg-green-100 text-green-600", textColor: "text-green-700" },
                 { icon: TrendingDown, label: "Gastos Operativos (Caja)", value: `-$${totalVariableExpenses.toFixed(2)}`, bg: "bg-red-50/50 border-red-100", iconBg: "bg-red-100 text-red-600", textColor: "text-red-700" },
                 { icon: ShoppingCart, label: "Compras de Insumos", value: `-$${totalPurchases.toFixed(2)}`, bg: "bg-yellow-50/50 border-yellow-100", iconBg: "bg-yellow-100 text-yellow-600", textColor: "text-yellow-700" },
-                { icon: TrendingDown, label: `Gastos Fijos (Prorr. ${daysToCalculate} días)`, value: `-$${totalFixedExpenses.toFixed(2)}`, bg: "bg-orange-50/50 border-orange-100", iconBg: "bg-orange-100 text-orange-600", textColor: "text-orange-700" },
               ].map(({ icon: Icon, label, value, bg, iconBg, textColor }) => (
                 <div key={label} className={`flex justify-between items-center p-4 ${bg} rounded-xl border`}>
                   <div className="flex items-center gap-3">
@@ -242,7 +236,11 @@ export function Statistics() {
             <div className={`flex-1 w-full p-8 rounded-2xl border flex flex-col items-center justify-center text-center ${netBalance >= 0 ? "bg-blue-50/50 border-blue-200" : "bg-red-50/50 border-red-200"}`}>
               <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Ganancia Neta Estimada</p>
               <p className={`text-5xl font-black ${netBalance >= 0 ? "text-blue-700" : "text-red-600"}`}>${netBalance.toFixed(2)}</p>
-              <p className="text-sm text-gray-500 mt-4 max-w-[250px]">Balance final considerando ingresos, insumos y servicios.</p>
+              <p className="text-sm text-gray-500 mt-4 max-w-[250px]">Balance de ingresos menos gastos variables y compras del período.</p>
+              <div className="mt-4 text-xs text-gray-400 bg-white/50 border border-gray-200 rounded-lg px-3 py-2">
+                <p>Gastos fijos mensuales (servicios):</p>
+                <p className="font-bold text-gray-500">${monthlyFixedExpenses.toFixed(2)}</p>
+              </div>
             </div>
           </div>
         </div>
