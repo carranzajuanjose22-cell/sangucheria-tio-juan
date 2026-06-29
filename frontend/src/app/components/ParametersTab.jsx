@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, X, Edit2, Trash2 } from "lucide-react";
+import { Plus, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { ProductBuilder } from "../pages/ProductBuilder.jsx";
 import { api } from "../pages/api.js";
 import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
@@ -256,27 +256,49 @@ export function ParametersTab() {
   );
 }
 
-function ParameterSection({ title, onAdd, isEmpty, children }) {
+function ParameterSection({ title, onAdd, isEmpty, children, defaultOpen = false }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50/50">
-        <h2 className="text-lg font-medium text-gray-900">{title}</h2>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsOpen((open) => !open);
+          }
+        }}
+        className={`px-6 py-4 flex items-center justify-between bg-gray-50/50 cursor-pointer hover:bg-gray-100/50 transition-colors ${isOpen ? "border-b border-gray-200" : ""}`}
+      >
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-medium text-gray-900">{title}</h2>
+          <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+        </div>
         <button
-          onClick={onAdd}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAdd();
+          }}
           className="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
         >
           <Plus className="w-4 h-4 mr-1" /> Agregar
         </button>
       </div>
-      <div className="overflow-x-auto">
-        {isEmpty ? (
-          <div className="px-6 py-8 text-center text-sm text-gray-500">
-            No hay registros de {title.toLowerCase()}.
-          </div>
-        ) : (
-          children
-        )}
-      </div>
+      {isOpen && (
+        <div className="overflow-x-auto">
+          {isEmpty ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-500">
+              No hay registros de {title.toLowerCase()}.
+            </div>
+          ) : (
+            children
+          )}
+        </div>
+      )}
     </div>
   );
 }
