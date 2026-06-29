@@ -3,6 +3,12 @@ import { useLocation } from "react-router";
 import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow } from "lucide-react";
 import { api } from "./api.js";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import {
+  calculateSaleTotals,
+  buildInitialPayments,
+  applyPaymentMethodChange,
+  removePaymentLine,
+} from "../utils/payments.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister, appendSale } from "../utils/register.js";
 
@@ -209,15 +215,34 @@ export function EmployeePos() {
 
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const currentSubtotal = payingOrder ? payingOrder.total : cartSubtotal;
-  const baseForSurcharge = payingOrder ? Math.max(0, payingOrder.total - (payingOrder.advanceAmount || 0)) : cartSubtotal;
-  const mainMethod = availablePayments.find((p) => p.name === payments[0]?.method);
-  const surchargePercent = mainMethod?.surcharge || 0;
-  const surchargeAmount = (baseForSurcharge * surchargePercent) / 100;
-  const total = currentSubtotal + surchargeAmount;
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const remaining = payingOrder ? total - totalPaid - (payingOrder.advanceAmount || 0) : total - totalPaid;
+  const advanceAmount = payingOrder?.advanceAmount || 0;
+  const {
+    surchargePercent,
+    surchargeAmount,
+    total,
+    amountDue,
+  } = calculateSaleTotals(
+    currentSubtotal,
+    advanceAmount,
+    payments[0]?.method,
+    availablePayments
+  );
+  const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const remaining = amountDue - totalPaid;
 
   const updatePayment = (index, field, value) => {
+    if (field === "method" && payingOrder) {
+      setPayments(applyPaymentMethodChange(
+        payments,
+        index,
+        value,
+        payingOrder.total,
+        advanceAmount,
+        availablePayments
+      ));
+      return;
+    }
+
     const newPayments = [...payments];
     const safeValue = field === "amount" ? nonNegative(value) : value;
     newPayments[index] = { ...newPayments[index], [field]: safeValue };
@@ -262,12 +287,7 @@ export function EmployeePos() {
       keepInPrep: keepInPrep
     };
     setPayingOrder(newOrder);
-
-    const defaultMethod = availablePayments[0];
-    const surcharge = defaultMethod?.surcharge || 0;
-    const baseAmount = Math.max(0, newOrder.total - (newOrder.advanceAmount || 0));
-    const initialTotal = baseAmount + (baseAmount * surcharge / 100);
-    setPayments([{ method: defaultMethod?.name || "", amount: parseFloat(initialTotal.toFixed(2)) }]);
+    setPayments(buildInitialPayments(newOrder.total, newOrder.advanceAmount || 0, availablePayments));
     setModalState("payment");
   };
 
@@ -295,18 +315,16 @@ export function EmployeePos() {
 
   const handleOpenPayment = (order) => {
     setPayingOrder(order);
-    const defaultMethod = availablePayments[0];
-    const surcharge = defaultMethod?.surcharge || 0;
-    const baseAmount = Math.max(0, order.total - (order.advanceAmount || 0));
-    const initialTotal = baseAmount + (baseAmount * surcharge / 100);
-    setPayments([{ method: defaultMethod?.name || "", amount: parseFloat(initialTotal.toFixed(2)) }]);
+    setPayments(buildInitialPayments(order.total, order.advanceAmount || 0, availablePayments));
     setModalState("payment");
   };
 
   const handleRegisterSale = async () => {
     if (!payingOrder || isRegisterClosed) return;
-    const requiredToPay = Math.max(0, total - (payingOrder.advanceAmount || 0));
-    if (totalPaid < requiredToPay) { alert(`Falta pagar $${remaining.toFixed(2)}`); return; }
+    if (totalPaid < amountDue) {
+      alert(`Falta pagar $${remaining.toFixed(2)}`);
+      return;
+    }
     
     const finalPayments = [...payments];
     if (payingOrder.advanceAmount > 0) {
@@ -874,7 +892,7 @@ export function EmployeePos() {
                 )}
                 <div className="flex justify-between items-center pt-3 border-t border-blue-200">
                   <span className="text-gray-900 font-bold">Total a Cobrar</span>
-                  <span className="text-2xl font-black text-blue-700">${Math.max(0, total - (payingOrder.advanceAmount || 0)).toFixed(2)}</span>
+                  <span className="text-2xl font-black text-blue-700">${amountDue.toFixed(2)}</span>
                 </div>
               </div>
               <div className="mb-4">
@@ -903,7 +921,20 @@ export function EmployeePos() {
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
                         <input type="text" inputMode="decimal" value={payment.amount || ""} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) updatePayment(index, "amount", v === "" ? 0 : v); }} className="w-full pl-5 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                       </div>
-                      {payments.length > 1 && <button onClick={() => setPayments(payments.filter((_, i) => i !== index))} className="p-2 text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button>}
+                      {payments.length > 1 && (
+                        <button
+                          onClick={() => setPayments(removePaymentLine(
+                            payments,
+                            index,
+                            payingOrder.total,
+                            advanceAmount,
+                            availablePayments
+                          ))}
+                          className="p-2 text-gray-400 hover:text-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   );
                   })}
@@ -917,7 +948,7 @@ export function EmployeePos() {
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3 shrink-0">
               <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleRegisterSale} disabled={totalPaid < Math.max(0, total - (payingOrder.advanceAmount || 0))} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < Math.max(0, total - (payingOrder.advanceAmount || 0)) ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
+              <button onClick={handleRegisterSale} disabled={totalPaid < amountDue} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < amountDue ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
             </div>
           </div>
         </div>
