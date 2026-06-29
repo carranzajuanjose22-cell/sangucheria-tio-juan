@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import { Package, Plus, Settings2, Save, X, Calculator, Trash2, RotateCcw, Pencil, Check, ChevronDown } from "lucide-react";
 import { api } from "./api.js";
 import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
+import {
+  isUnitSaleVariety,
+  isPebeteVariety,
+  getUnitManufacturingCost,
+  normalizeMigaCatalog,
+} from "../utils/migaCatalog.js";
 
 function createMigaTemplate(withUnitPrices = false) {
   const rnd = () => Math.random().toString(36).substr(2, 9);
@@ -10,14 +16,26 @@ function createMigaTemplate(withUnitPrices = false) {
     { id: rnd(), name: "Media Docena", price: 0, recipe: [], recipe2: [] },
     { id: rnd(), name: "Plancha de 3", price: 0, recipe: [], recipe2: [] }
   ];
+  const makeVariety = (name) => {
+    const base = { id: rnd(), name, presentations: makePres() };
+    if (withUnitPrices && isUnitSaleVariety(name)) {
+      return {
+        ...base,
+        unitPrice: 0,
+        ...(isPebeteVariety(name) ? { unitRecipe: [] } : {}),
+      };
+    }
+    return base;
+  };
   return {
     id: rnd(),
     name: "Sándwiches de Miga",
     varieties: [
-      { id: rnd(), name: "Paleta", presentations: makePres(), unitPrice: withUnitPrices ? 0 : undefined },
-      { id: rnd(), name: "Jamón o Salame", presentations: makePres(), unitPrice: withUnitPrices ? 0 : undefined },
-      { id: rnd(), name: "Bondiola o Crudo", presentations: makePres(), unitPrice: withUnitPrices ? 0 : undefined },
-      { id: rnd(), name: "Ternera", presentations: makePres(), unitPrice: withUnitPrices ? 0 : undefined },
+      makeVariety("Paleta"),
+      makeVariety("Pebete"),
+      makeVariety("Jamón o Salame"),
+      makeVariety("Bondiola o Crudo"),
+      makeVariety("Ternera"),
     ],
   };
 }
@@ -33,6 +51,7 @@ function VarietyCard({
   cancelEditPrice,
   setEditingPrice,
   openRecipeModal,
+  openUnitRecipeModal,
   updateVarietyField,
 }) {
   const [isOpen, setIsOpen] = useState(true);
@@ -128,35 +147,60 @@ function VarietyCard({
               </tbody>
             </table>
           </div>
-          {typeof variety.unitPrice !== 'undefined' && (
-            <div className="p-4 bg-gray-50/50 border-t border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-700">Precio por Unidad:</span>
+          {isUnitSaleVariety(variety.name) && (
+            <div className="p-4 bg-blue-50/40 border-t border-blue-100 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-700">Precio por Unidad (venta):</span>
+                  {editingUnitPrice ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      inputMode="decimal"
+                      value={unitPriceValue}
+                      onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setUnitPriceValue(e.target.value); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleConfirmUnitPrice(); if (e.key === "Escape") handleCancelUnitPrice(); }}
+                      className="w-24 px-2 py-1 border border-blue-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="0.00"
+                    />
+                  ) : (
+                    <span className="font-bold text-blue-800 text-lg">${(variety.unitPrice || 0).toFixed(2)}</span>
+                  )}
+                </div>
                 {editingUnitPrice ? (
-                  <input
-                    autoFocus
-                    type="text"
-                    inputMode="decimal"
-                    value={unitPriceValue}
-                    onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setUnitPriceValue(e.target.value); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleConfirmUnitPrice(); if (e.key === "Escape") handleCancelUnitPrice(); }}
-                    className="w-24 px-2 py-1 border border-blue-400 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="0.00"
-                  />
+                  <div className="flex items-center gap-1">
+                    <button onClick={handleConfirmUnitPrice} title="Guardar" className="p-1.5 text-white bg-green-500 hover:bg-green-600 rounded-lg"><Check size={15} /></button>
+                    <button onClick={handleCancelUnitPrice} title="Cancelar" className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg"><X size={15} /></button>
+                  </div>
                 ) : (
-                  <span className="font-bold text-blue-800 text-lg">${(variety.unitPrice || 0).toFixed(2)}</span>
+                  <button onClick={() => { setUnitPriceValue(String(variety.unitPrice || "")); setEditingUnitPrice(true); }} title="Editar precio unitario" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                    <Pencil size={15} />
+                  </button>
                 )}
               </div>
-              {editingUnitPrice ? (
-                <div className="flex items-center gap-1">
-                  <button onClick={handleConfirmUnitPrice} title="Guardar" className="p-1.5 text-white bg-green-500 hover:bg-green-600 rounded-lg"><Check size={15} /></button>
-                  <button onClick={handleCancelUnitPrice} title="Cancelar" className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg"><X size={15} /></button>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-blue-100">
+                <div>
+                  <span className="font-semibold text-gray-700 block">Costo de fabricación (1 unidad):</span>
+                  <span className="text-xs text-gray-500">
+                    {isPebeteVariety(variety.name)
+                      ? "Receta propia de 1 pebete"
+                      : "Igual al costo de Plancha de 3 (mínimo de producción)"}
+                  </span>
                 </div>
-              ) : (
-                <button onClick={() => { setUnitPriceValue(String(variety.unitPrice || "")); setEditingUnitPrice(true); }} title="Editar precio unitario" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                  <Pencil size={15} />
-                </button>
-              )}
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-gray-900 text-lg">
+                    ${getUnitManufacturingCost(variety, calculateRecipeCost).toFixed(2)}
+                  </span>
+                  {isPebeteVariety(variety.name) && (
+                    <button
+                      onClick={() => openUnitRecipeModal(variety.id, variety)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 rounded-lg text-sm font-medium"
+                    >
+                      <Settings2 size={16} /> Configurar costo unitario
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
           {isCombined && (
@@ -202,7 +246,7 @@ export function ProductBuilder({ customInputs = [] }) {
     const load = async () => {
       try {
         const saved = await api.get("/catalog/MIGA");
-        setProduct(saved);
+        setProduct(normalizeMigaCatalog(saved));
         setHasUnsavedChanges(false);
       } catch {
         setProduct(createMigaTemplate(true));
@@ -240,7 +284,7 @@ export function ProductBuilder({ customInputs = [] }) {
   const handleSaveCatalog = async () => {
     if (product) {
       try {
-        await api.post("/catalog/MIGA", product);
+        await api.post("/catalog/MIGA", normalizeMigaCatalog(product));
         localStorage.setItem("pos_miga_product", JSON.stringify(product));
         window.dispatchEvent(new Event("catalog-updated"));
         setHasUnsavedChanges(false);
@@ -269,8 +313,19 @@ export function ProductBuilder({ customInputs = [] }) {
     }, 0);
 
   const openRecipeModal = (varId, pres, recipeKey = "recipe", subName = "") => {
-    setActivePresentation({ varId, pres, recipeKey, subName });
+    setActivePresentation({ varId, pres, recipeKey, subName, isUnitRecipe: false });
     setTempRecipe([...(pres[recipeKey] || [])]);
+  };
+
+  const openUnitRecipeModal = (varId, variety) => {
+    setActivePresentation({
+      varId,
+      pres: { id: "unit", name: "Unidad" },
+      recipeKey: "unitRecipe",
+      subName: "1 unidad",
+      isUnitRecipe: true,
+    });
+    setTempRecipe([...(variety.unitRecipe || [])]);
   };
 
   const addInsumoToRecipe = () => {
@@ -289,7 +344,17 @@ export function ProductBuilder({ customInputs = [] }) {
 
   const saveRecipe = () => {
     if (!product || !activePresentation) return;
-    const { varId, pres, recipeKey } = activePresentation;
+    const { varId, pres, recipeKey, isUnitRecipe } = activePresentation;
+
+    if (isUnitRecipe) {
+      const updatedVarieties = product.varieties.map((v) =>
+        v.id === varId ? { ...v, unitRecipe: tempRecipe } : v
+      );
+      updateProduct({ ...product, varieties: updatedVarieties });
+      setActivePresentation(null);
+      return;
+    }
+
     const updatedVarieties = product.varieties.map((v) => {
       if (v.id !== varId) return v;
       const isDocena = pres.name === "Docena";
@@ -369,7 +434,15 @@ export function ProductBuilder({ customInputs = [] }) {
           { id: rnd(), name: "Media Docena", price: nonNegative(newVarPrices.media), recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.5 })), recipe2: [] },
           { id: rnd(), name: "Plancha de 3", price: nonNegative(newVarPrices.plancha), recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.25 })), recipe2: [] },
         ];
-    updateProduct({ ...product, varieties: [...product.varieties, { id: rnd(), name: newVarName.trim(), presentations: templatePresentations, unitPrice: 0 }] });
+    updateProduct({ ...product, varieties: [...product.varieties, {
+      id: rnd(),
+      name: newVarName.trim(),
+      presentations: templatePresentations,
+      ...(isUnitSaleVariety(newVarName.trim()) ? {
+        unitPrice: 0,
+        ...(isPebeteVariety(newVarName.trim()) ? { unitRecipe: [] } : {}),
+      } : {}),
+    }] });
     setIsAddVarietyOpen(false);
   };
 
@@ -406,7 +479,9 @@ export function ProductBuilder({ customInputs = [] }) {
                 cancelEditPrice={cancelEditPrice}
                 setEditingPrice={setEditingPrice}
                 openRecipeModal={openRecipeModal}
+                openUnitRecipeModal={openUnitRecipeModal}
                 updateVarietyField={updateVarietyField}
+                calculateRecipeCost={calculateRecipeCost}
               />
             ))}
           </div>

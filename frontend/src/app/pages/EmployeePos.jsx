@@ -9,6 +9,7 @@ import {
   applyPaymentMethodChange,
   removePaymentLine,
 } from "../utils/payments.js";
+import { isUnitSaleVariety, normalizeMigaCatalog } from "../utils/migaCatalog.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister, appendSale } from "../utils/register.js";
 
@@ -99,10 +100,11 @@ export function EmployeePos() {
 
   useEffect(() => {
     const applyMigaData = (parsed) => {
-      setMigaTitle(parsed.name || "Sándwiches de Miga");
-      const headers = parsed.varieties.length > 0 ? parsed.varieties[0].presentations.map((p) => p.name) : ["Docena", "Media Docena", "Plancha de 3"];
+      const catalog = normalizeMigaCatalog(parsed);
+      setMigaTitle(catalog.name || "Sándwiches de Miga");
+      const headers = catalog.varieties.length > 0 ? catalog.varieties[0].presentations.map((p) => p.name) : ["Docena", "Media Docena", "Plancha de 3"];
       setMigaHeaders(headers);
-      setMigaMatrix(parsed.varieties.map((v) => {
+      setMigaMatrix(catalog.varieties.map((v) => {
         const presObj = {};
         v.presentations.forEach((p) => { presObj[p.name] = { ...p, name: `${p.name} de ${v.name}` }; });
         return { variety: v.name, presentations: presObj, varietyData: v };
@@ -137,6 +139,7 @@ export function EmployeePos() {
   const totalExpensesToday = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const filteredMiga = migaMatrix.filter((row) => row.variety.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredOther = otherProducts.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const hasUnitSaleVarieties = migaMatrix.some((row) => isUnitSaleVariety(row.variety));
 
   const addToCart = (product) => {
     setCart((current) => {
@@ -146,26 +149,31 @@ export function EmployeePos() {
     });
   };
 
+  const openUnitSaleModal = (variety) => {
+    if (isRegisterClosed || !variety) return;
+    setUnitQuantity(1);
+    setUnitSaleModal(variety);
+  };
+
+  const openPresentationOptions = (variety, presentationName) => {
+    const product = variety.presentations.find((p) => p.name === presentationName);
+    if (!product) return;
+    setPendingMigaProduct({ ...product, name: `${product.name} de ${variety.name}` });
+    setCustomNote("");
+    setEggCount(0);
+    setSelectedVariant(null);
+    setMigaOptionModal(true);
+  };
+
   const handleVarietyClick = (variety, presentationName) => {
     if (isRegisterClosed) return;
 
-    const nameLower = variety.name.toLowerCase();
-    const hasUnitPrice = typeof variety.unitPrice === 'number' && variety.unitPrice > 0;
-    const isSpecialVariety = nameLower.includes("paleta") || nameLower.includes("pebete");
-
-    if (hasUnitPrice && isSpecialVariety) {
-      setUnitQuantity(1);
-      setUnitSaleModal(variety);
-    } else {
-      const product = variety.presentations.find(p => p.name === presentationName);
-      if (product) {
-        setPendingMigaProduct({ ...product, name: `${product.name} de ${variety.name}` });
-        setCustomNote("");
-        setEggCount(0);
-        setSelectedVariant(null);
-        setMigaOptionModal(true);
-      }
+    if (isUnitSaleVariety(variety.name)) {
+      openUnitSaleModal(variety);
+      return;
     }
+
+    openPresentationOptions(variety, presentationName);
   };
 
 
@@ -455,7 +463,10 @@ export function EmployeePos() {
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200">
                         <th className="px-4 py-3 text-sm font-bold text-gray-700 border-r border-gray-200">Variedad</th>
-                        {migaHeaders.map((header) => <th key={header} className="px-4 py-3 text-sm font-bold text-gray-700 text-center border-r border-gray-200 last:border-0">{header}</th>)}
+                        {migaHeaders.map((header) => <th key={header} className="px-4 py-3 text-sm font-bold text-gray-700 text-center border-r border-gray-200">{header}</th>)}
+                        {hasUnitSaleVarieties && (
+                          <th className="px-4 py-3 text-sm font-bold text-gray-700 text-center">Unidad</th>
+                        )}
                       </tr>
                       {/* El thead se genera dinámicamente en el componente que no está aquí */}
                     </thead>
@@ -465,16 +476,17 @@ export function EmployeePos() {
                           <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-200 bg-gray-50/50">{row.variety}</td>
                           {migaHeaders.map((pres) => {
                             const product = row.presentations[pres];
-                            if (!product) return <td key={pres} className="px-2 py-2 border-r border-gray-200 last:border-0"></td>;
-                            const presentation = row.presentations[pres];
+                            if (!product) return <td key={pres} className="px-2 py-2 border-r border-gray-200"></td>;
                             const fullVariety = migaMatrix.find(m => m.variety === row.variety)?.varietyData;
 
                             return (
-                              <td key={pres} className="px-2 py-2 border-r border-gray-200 last:border-0 align-middle">
+                              <td key={pres} className="px-2 py-2 border-r border-gray-200 align-middle">
                                 <button
                                   onClick={() => {
                                     if (isRegisterClosed) return;
-                                    if (fullVariety) {
+                                    if (fullVariety && isUnitSaleVariety(fullVariety.name)) {
+                                      openPresentationOptions(fullVariety, pres);
+                                    } else if (fullVariety) {
                                       handleVarietyClick(fullVariety, pres);
                                     } else {
                                       setPendingMigaProduct(product);
@@ -493,6 +505,22 @@ export function EmployeePos() {
                               </td>
                             );
                           })}
+                          {hasUnitSaleVarieties && (
+                            <td className="px-2 py-2 align-middle">
+                              {isUnitSaleVariety(row.variety) ? (
+                                <button
+                                  onClick={() => openUnitSaleModal(migaMatrix.find(m => m.variety === row.variety)?.varietyData)}
+                                  disabled={isRegisterClosed}
+                                  className="w-full h-full flex flex-col items-center justify-center py-2 px-1 rounded-lg hover:bg-green-50 hover:shadow-sm border border-green-200 bg-green-50/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                                >
+                                  <span className="text-green-700 font-black text-base group-hover:scale-110 transition-transform">
+                                    ${(migaMatrix.find(m => m.variety === row.variety)?.varietyData?.unitPrice || 0).toFixed(2)}
+                                  </span>
+                                  <span className="text-[10px] text-green-600 font-semibold uppercase mt-1 tracking-wider">1 Unidad</span>
+                                </button>
+                              ) : null}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -1157,7 +1185,10 @@ export function EmployeePos() {
                 {/* Opción por Unidad */}
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex flex-col items-center justify-center">
                   <h4 className="font-bold text-blue-800 text-lg mb-3">Por Unidad</h4>
-                  <p className="text-3xl font-black text-blue-900 mb-4">${(unitSaleModal.unitPrice || 0).toFixed(2)}</p>
+                  <p className="text-3xl font-black text-blue-900 mb-1">${(unitSaleModal.unitPrice || 0).toFixed(2)}</p>
+                  {(unitSaleModal.unitPrice || 0) <= 0 && (
+                    <p className="text-xs text-orange-600 mb-3 text-center">Configurá el precio en Configuración → Guardar Catálogo</p>
+                  )}
                   <div className="flex items-center gap-2">
                     <button onClick={() => setUnitQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 bg-blue-200 text-blue-800 rounded-full font-bold">-</button>
                     <input
@@ -1168,7 +1199,11 @@ export function EmployeePos() {
                     />
                     <button onClick={() => setUnitQuantity(q => q + 1)} className="w-8 h-8 bg-blue-200 text-blue-800 rounded-full font-bold">+</button>
                   </div>
-                  <button onClick={addUnitToCart} className="mt-5 w-full bg-blue-600 text-white font-medium py-2 rounded-lg hover:bg-blue-700">
+                  <button
+                    onClick={addUnitToCart}
+                    disabled={(unitSaleModal.unitPrice || 0) <= 0}
+                    className={`mt-5 w-full font-medium py-2 rounded-lg ${(unitSaleModal.unitPrice || 0) <= 0 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                  >
                     Agregar {unitQuantity} {unitQuantity > 1 ? 'unidades' : 'unidad'}
                   </button>
                 </div>
@@ -1181,7 +1216,7 @@ export function EmployeePos() {
                       <button
                         key={pres.id}
                         onClick={() => {
-                          handleVarietyClick(unitSaleModal, pres.name); // Reutiliza la lógica para abrir el modal de opciones
+                          openPresentationOptions(unitSaleModal, pres.name);
                           setUnitSaleModal(null);
                         }}
                         className="w-full flex justify-between items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 hover:border-gray-400"
