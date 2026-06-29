@@ -215,7 +215,7 @@ export function EmployeePos() {
 
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const currentSubtotal = payingOrder ? payingOrder.total : cartSubtotal;
-  const advanceAmount = payingOrder?.advanceAmount || 0;
+  const orderAdvanceAmount = payingOrder?.advanceAmount || 0;
   const {
     surchargePercent,
     surchargeAmount,
@@ -223,7 +223,7 @@ export function EmployeePos() {
     amountDue,
   } = calculateSaleTotals(
     currentSubtotal,
-    advanceAmount,
+    orderAdvanceAmount,
     payments[0]?.method,
     availablePayments
   );
@@ -237,7 +237,7 @@ export function EmployeePos() {
         index,
         value,
         payingOrder.total,
-        advanceAmount,
+        orderAdvanceAmount,
         availablePayments
       ));
       return;
@@ -473,14 +473,15 @@ export function EmployeePos() {
                               <td key={pres} className="px-2 py-2 border-r border-gray-200 last:border-0 align-middle">
                                 <button
                                   onClick={() => {
-                                    if (!isRegisterClosed) {
-                                    setPendingMigaProduct(product);
-                                    setCustomNote("");
-                                    setEggCount(0);
-                                    setSelectedVariant(null);
-                                    setMigaOptionModal(true);
+                                    if (isRegisterClosed) return;
                                     if (fullVariety) {
                                       handleVarietyClick(fullVariety, pres);
+                                    } else {
+                                      setPendingMigaProduct(product);
+                                      setCustomNote("");
+                                      setEggCount(0);
+                                      setSelectedVariant(null);
+                                      setMigaOptionModal(true);
                                     }
                                   }}
                                   disabled={isRegisterClosed}
@@ -927,7 +928,7 @@ export function EmployeePos() {
                             payments,
                             index,
                             payingOrder.total,
-                            advanceAmount,
+                            orderAdvanceAmount,
                             availablePayments
                           ))}
                           className="p-2 text-gray-400 hover:text-red-600"
