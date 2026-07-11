@@ -12,9 +12,9 @@ import {
 function createMigaTemplate(withUnitPrices = false) {
   const rnd = () => Math.random().toString(36).substr(2, 9);
   const makePres = () => [
-    { id: rnd(), name: "Docena", price: 0, recipe: [], recipe2: [] },
-    { id: rnd(), name: "Media Docena", price: 0, recipe: [], recipe2: [] },
-    { id: rnd(), name: "Plancha de 3", price: 0, recipe: [], recipe2: [] }
+    { id: rnd(), name: "Docena", price: 0, wholesalePrice: 0, recipe: [], recipe2: [] },
+    { id: rnd(), name: "Media Docena", price: 0, wholesalePrice: 0, recipe: [], recipe2: [] },
+    { id: rnd(), name: "Plancha de 3", price: 0, wholesalePrice: 0, recipe: [], recipe2: [] }
   ];
   const makeVariety = (name) => {
     const base = { id: rnd(), name, presentations: makePres() };
@@ -22,6 +22,7 @@ function createMigaTemplate(withUnitPrices = false) {
       return {
         ...base,
         unitPrice: 0,
+        unitWholesalePrice: 0,
         ...(isPebeteVariety(name) ? { unitRecipe: [] } : {}),
       };
     }
@@ -65,6 +66,8 @@ function VarietyCard({
 
   const [editingUnitPrice, setEditingUnitPrice] = useState(false);
   const [unitPriceValue, setUnitPriceValue] = useState(String(variety.unitPrice || ""));
+  const [editingUnitWholesalePrice, setEditingUnitWholesalePrice] = useState(false);
+  const [unitWholesalePriceValue, setUnitWholesalePriceValue] = useState(String(variety.unitWholesalePrice || ""));
 
   const handleConfirmUnitPrice = () => {
     updateVarietyField(variety.id, 'unitPrice', nonNegative(unitPriceValue));
@@ -74,6 +77,16 @@ function VarietyCard({
   const handleCancelUnitPrice = () => {
     setUnitPriceValue(String(variety.unitPrice || ""));
     setEditingUnitPrice(false);
+  };
+
+  const handleConfirmUnitWholesalePrice = () => {
+    updateVarietyField(variety.id, "unitWholesalePrice", nonNegative(unitWholesalePriceValue));
+    setEditingUnitWholesalePrice(false);
+  };
+
+  const handleCancelUnitWholesalePrice = () => {
+    setUnitWholesalePriceValue(String(variety.unitWholesalePrice || ""));
+    setEditingUnitWholesalePrice(false);
   };
 
   return (
@@ -90,7 +103,8 @@ function VarietyCard({
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-4 py-3 text-sm font-semibold text-gray-600">Presentación</th>
-                  <th className="px-4 py-3 text-sm font-semibold text-gray-600 w-40">Precio ($)</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-600 w-40">Precio Minorista ($)</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-600 w-40">Precio Mayorista ($)</th>
                   <th className="px-4 py-3 text-sm font-semibold text-gray-600">Costo Calculado</th>
                   <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center w-28">Acciones</th>
                   <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-right">Insumos (Receta)</th>
@@ -100,12 +114,13 @@ function VarietyCard({
                 {variety.presentations.map((pres) => {
                   const cost = calculateRecipeCost(pres.recipe || []);
                   const margin = cost > 0 ? ((pres.price - cost) / cost) * 100 : 0;
-                  const editing = isEditing(variety.id, pres.id);
+                  const editingRetail = isEditing(variety.id, pres.id, "price");
+                  const editingWholesale = isEditing(variety.id, pres.id, "wholesalePrice");
                   return (
                     <tr key={pres.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-900">{pres.name}</td>
                       <td className="px-4 py-3">
-                        {editing ? (
+                        {editingRetail ? (
                           <input
                             autoFocus
                             type="text"
@@ -121,19 +136,38 @@ function VarietyCard({
                         )}
                       </td>
                       <td className="px-4 py-3">
+                        {editingWholesale ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            inputMode="decimal"
+                            value={editingPrice.value}
+                            onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setEditingPrice({ ...editingPrice, value: e.target.value }); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") confirmEditPrice(); if (e.key === "Escape") cancelEditPrice(); }}
+                            className="w-full px-3 py-1.5 border border-purple-400 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                            placeholder="0.00"
+                          />
+                        ) : (
+                          <span className="font-semibold text-purple-800">${(pres.wholesalePrice || 0).toFixed(2)}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
                         <div className="flex flex-col">
                           <span className="font-bold text-gray-900">${cost.toFixed(2)}</span>
                           {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 70 ? "text-green-600" : "text-red-500"}`}>Margen: {margin.toFixed(1)}%</span>}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {editing ? (
+                        {editingRetail || editingWholesale ? (
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={confirmEditPrice} title="Guardar" className="p-1.5 text-white bg-green-500 hover:bg-green-600 rounded-lg"><Check size={15} /></button>
                             <button onClick={cancelEditPrice} title="Cancelar" className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg"><X size={15} /></button>
                           </div>
                         ) : (
-                          <button onClick={() => startEditPrice(variety.id, pres.id, pres.price)} title="Editar precio" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil size={15} /></button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => startEditPrice(variety.id, pres.id, pres.price, "price")} title="Editar precio minorista" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil size={15} /></button>
+                            <button onClick={() => startEditPrice(variety.id, pres.id, pres.wholesalePrice || 0, "wholesalePrice")} title="Editar precio mayorista" className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg"><Pencil size={15} /></button>
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -151,7 +185,7 @@ function VarietyCard({
             <div className="p-4 bg-blue-50/40 border-t border-blue-100 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-gray-700">Precio por Unidad (venta):</span>
+                  <span className="font-semibold text-gray-700">Precio por Unidad (minorista):</span>
                   {editingUnitPrice ? (
                     <input
                       autoFocus
@@ -174,6 +208,35 @@ function VarietyCard({
                   </div>
                 ) : (
                   <button onClick={() => { setUnitPriceValue(String(variety.unitPrice || "")); setEditingUnitPrice(true); }} title="Editar precio unitario" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                    <Pencil size={15} />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-blue-100">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-700">Precio por Unidad (mayorista):</span>
+                  {editingUnitWholesalePrice ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      inputMode="decimal"
+                      value={unitWholesalePriceValue}
+                      onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setUnitWholesalePriceValue(e.target.value); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleConfirmUnitWholesalePrice(); if (e.key === "Escape") handleCancelUnitWholesalePrice(); }}
+                      className="w-24 px-2 py-1 border border-purple-400 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                      placeholder="0.00"
+                    />
+                  ) : (
+                    <span className="font-bold text-purple-800 text-lg">${(variety.unitWholesalePrice || 0).toFixed(2)}</span>
+                  )}
+                </div>
+                {editingUnitWholesalePrice ? (
+                  <div className="flex items-center gap-1">
+                    <button onClick={handleConfirmUnitWholesalePrice} title="Guardar" className="p-1.5 text-white bg-green-500 hover:bg-green-600 rounded-lg"><Check size={15} /></button>
+                    <button onClick={handleCancelUnitWholesalePrice} title="Cancelar" className="p-1.5 text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg"><X size={15} /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setUnitWholesalePriceValue(String(variety.unitWholesalePrice || "")); setEditingUnitWholesalePrice(true); }} title="Editar precio mayorista unitario" className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg">
                     <Pencil size={15} />
                   </button>
                 )}
@@ -207,7 +270,42 @@ function VarietyCard({
             <div className="overflow-x-auto border-t border-gray-200">
               <h4 className="px-4 py-2 text-sm font-bold text-gray-700 bg-gray-50 border-b border-gray-200">Costos ({name2})</h4>
               <table className="w-full text-left">
-                {/* ... (table for recipe2, similar to above) ... */}
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-600">Presentación</th>
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-600">Costo Calculado</th>
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-right">Insumos (Receta)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {variety.presentations.map((pres) => {
+                    const cost2 = calculateRecipeCost(pres.recipe2 || []);
+                    const margin2 = cost2 > 0 ? ((pres.price - cost2) / cost2) * 100 : 0;
+                    return (
+                      <tr key={`${pres.id}-recipe2`} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{pres.name}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-gray-900">${cost2.toFixed(2)}</span>
+                            {pres.price > 0 && cost2 > 0 && (
+                              <span className={`text-xs font-medium ${margin2 >= 70 ? "text-green-600" : "text-red-500"}`}>
+                                Margen: {margin2.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => openRecipeModal(variety.id, pres, "recipe2", name2)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                          >
+                            <Settings2 size={16} /> Configurar Costos {name2}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
               </table>
             </div>
           )}
@@ -393,20 +491,32 @@ export function ProductBuilder({ customInputs = [] }) {
     updateProduct({ ...product, varieties: updatedVarieties });
   };
 
-  const startEditPrice = (varId, presId, currentPrice) => {
-    setEditingPrice({ varId, presId, value: currentPrice > 0 ? String(currentPrice) : "" });
+  const startEditPrice = (varId, presId, currentPrice, field = "price") => {
+    setEditingPrice({
+      varId,
+      presId,
+      field,
+      value: currentPrice > 0 ? String(currentPrice) : "",
+    });
   };
 
   const confirmEditPrice = () => {
     if (!editingPrice) return;
-    updatePresentationField(editingPrice.varId, editingPrice.presId, "price", nonNegative(editingPrice.value));
+    updatePresentationField(
+      editingPrice.varId,
+      editingPrice.presId,
+      editingPrice.field || "price",
+      nonNegative(editingPrice.value)
+    );
     setEditingPrice(null);
   };
 
   const cancelEditPrice = () => setEditingPrice(null);
 
-  const isEditing = (varId, presId) =>
-    editingPrice?.varId === varId && editingPrice?.presId === presId;
+  const isEditing = (varId, presId, field = "price") =>
+    editingPrice?.varId === varId
+    && editingPrice?.presId === presId
+    && (editingPrice?.field || "price") === field;
 
   const getRowCost = (insumoId, qtyStr) => {
     const insumo = availableInsumos.find((i) => i.id === insumoId);
@@ -427,12 +537,12 @@ export function ProductBuilder({ customInputs = [] }) {
           else if (p.name === "Media Docena") { price = nonNegative(newVarPrices.media); scale = 0.5; }
           else if (p.name === "Plancha de 3") { price = nonNegative(newVarPrices.plancha); scale = 0.25; }
           const scaledRecipe = recipe.map((r) => ({ ...r, quantity: r.quantity * scale }));
-          return { id: rnd(), name: p.name, price, recipe: scaledRecipe, recipe2: []};
+          return { id: rnd(), name: p.name, price, wholesalePrice: 0, recipe: scaledRecipe, recipe2: [] };
         })
       : [
-          { id: rnd(), name: "Docena", price: nonNegative(newVarPrices.docena), recipe: [...recipe], recipe2: [] },
-          { id: rnd(), name: "Media Docena", price: nonNegative(newVarPrices.media), recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.5 })), recipe2: [] },
-          { id: rnd(), name: "Plancha de 3", price: nonNegative(newVarPrices.plancha), recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.25 })), recipe2: [] },
+          { id: rnd(), name: "Docena", price: nonNegative(newVarPrices.docena), wholesalePrice: 0, recipe: [...recipe], recipe2: [] },
+          { id: rnd(), name: "Media Docena", price: nonNegative(newVarPrices.media), wholesalePrice: 0, recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.5 })), recipe2: [] },
+          { id: rnd(), name: "Plancha de 3", price: nonNegative(newVarPrices.plancha), wholesalePrice: 0, recipe: recipe.map((r) => ({ ...r, quantity: r.quantity * 0.25 })), recipe2: [] },
         ];
     updateProduct({ ...product, varieties: [...product.varieties, {
       id: rnd(),
@@ -440,6 +550,7 @@ export function ProductBuilder({ customInputs = [] }) {
       presentations: templatePresentations,
       ...(isUnitSaleVariety(newVarName.trim()) ? {
         unitPrice: 0,
+        unitWholesalePrice: 0,
         ...(isPebeteVariety(newVarName.trim()) ? { unitRecipe: [] } : {}),
       } : {}),
     }] });
@@ -481,7 +592,6 @@ export function ProductBuilder({ customInputs = [] }) {
                 openRecipeModal={openRecipeModal}
                 openUnitRecipeModal={openUnitRecipeModal}
                 updateVarietyField={updateVarietyField}
-                calculateRecipeCost={calculateRecipeCost}
               />
             ))}
           </div>

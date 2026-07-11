@@ -8,8 +8,15 @@ import {
   buildInitialPayments,
   applyPaymentMethodChange,
   removePaymentLine,
+  applyDiscountChange,
 } from "../utils/payments.js";
-import { isUnitSaleVariety, normalizeMigaCatalog } from "../utils/migaCatalog.js";
+import {
+  isUnitSaleVariety,
+  getPresentationPrice,
+  getUnitSalePrice,
+  normalizeMigaCatalog,
+} from "../utils/migaCatalog.js";
+import { getUnitProductPrice, normalizeUnitProductsCatalog } from "../utils/unitProductsCatalog.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister, appendSale } from "../utils/register.js";
 
@@ -43,7 +50,7 @@ export function EmployeePos() {
   const [expenseDesc, setExpenseDesc] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [migaMatrix, setMigaMatrix] = useState([]);
-  const [otherProducts] = useState([]);
+  const [otherProducts, setOtherProducts] = useState([]);
   const [migaTitle, setMigaTitle] = useState("Sándwiches de Miga");
   const [migaHeaders, setMigaHeaders] = useState(["Docena", "Media Docena", "Plancha de 3"]);
   const [migaOptionModal, setMigaOptionModal] = useState(false);
@@ -57,8 +64,12 @@ export function EmployeePos() {
   const [inputs, setInputs] = useState([]);
   const [eggCount, setEggCount] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(null);
-  const [unitSaleModal, setUnitSaleModal] = useState(null); // Para venta por unidad
+  const [unitSaleModal, setUnitSaleModal] = useState(null);
   const [unitQuantity, setUnitQuantity] = useState(1);
+  const [priceTier, setPriceTier] = useState("retail");
+  const [discountPercent, setDiscountPercent] = useState("0");
+  const [otherProductModal, setOtherProductModal] = useState(null);
+  const [otherProductQuantity, setOtherProductQuantity] = useState(1);
 
   useEffect(() => {
     const loadInputs = async () => {
@@ -133,6 +144,34 @@ export function EmployeePos() {
     };
   }, []);
 
+  useEffect(() => {
+    const applyOtherProducts = (parsed) => {
+      const catalog = normalizeUnitProductsCatalog(parsed);
+      setOtherProducts(catalog.products.filter((p) => p.name.trim()));
+    };
+
+    const loadOtherFromApi = async () => {
+      try {
+        const data = await api.get("/catalog/OTROS");
+        localStorage.setItem("pos_other_products", JSON.stringify(data));
+        applyOtherProducts(data);
+      } catch {
+        const saved = localStorage.getItem("pos_other_products");
+        if (saved) applyOtherProducts(JSON.parse(saved));
+        else setOtherProducts([]);
+      }
+    };
+
+    loadOtherFromApi();
+    const interval = setInterval(loadOtherFromApi, 30000);
+    const onCatalogUpdate = () => loadOtherFromApi();
+    window.addEventListener("catalog-updated", onCatalogUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("catalog-updated", onCatalogUpdate);
+    };
+  }, []);
+
   const currentDate = new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const isRegisterClosed = !registerState?.isOpen;
   const totalSalesToday = sales.reduce((sum, sale) => sum + sale.total, 0);
@@ -152,16 +191,24 @@ export function EmployeePos() {
   const openUnitSaleModal = (variety) => {
     if (isRegisterClosed || !variety) return;
     setUnitQuantity(1);
+    setPriceTier("retail");
     setUnitSaleModal(variety);
   };
 
   const openPresentationOptions = (variety, presentationName) => {
     const product = variety.presentations.find((p) => p.name === presentationName);
     if (!product) return;
-    setPendingMigaProduct({ ...product, name: `${product.name} de ${variety.name}` });
+    setPendingMigaProduct({
+      ...product,
+      name: `${product.name} de ${variety.name}`,
+      varietyName: variety.name,
+      retailPrice: product.price || 0,
+      wholesalePrice: product.wholesalePrice || 0,
+    });
     setCustomNote("");
     setEggCount(0);
     setSelectedVariant(null);
+    setPriceTier("retail");
     setMigaOptionModal(true);
   };
 
@@ -179,8 +226,10 @@ export function EmployeePos() {
 
   const handleConfirmMigaOption = (option) => {
     if (pendingMigaProduct) {
+      const tierLabel = priceTier === "wholesale" ? "Mayorista" : "Minorista";
       let finalName = option ? `${pendingMigaProduct.name} (${option})` : pendingMigaProduct.name;
-      let finalPrice = pendingMigaProduct.price || 0;
+      let finalPrice = getPresentationPrice(pendingMigaProduct, priceTier);
+      finalName += ` [${tierLabel}]`;
       
       if (eggCount > 0) {
         const eggInput = inputs.find((i) => i.name.toLowerCase().includes("huevo"));
@@ -189,26 +238,55 @@ export function EmployeePos() {
         finalName += ` + ${eggCount} Huevo${eggCount > 1 ? "s" : ""}`;
       }
       
-      const finalId = option ? `${pendingMigaProduct.id}-${option}-e${eggCount}` : `${pendingMigaProduct.id}-e${eggCount}`;
+      const finalId = option
+        ? `${pendingMigaProduct.id}-${option}-e${eggCount}-${priceTier}`
+        : `${pendingMigaProduct.id}-e${eggCount}-${priceTier}`;
       addToCart({ ...pendingMigaProduct, name: finalName, id: finalId, price: finalPrice });
     }
     setMigaOptionModal(false);
     setPendingMigaProduct(null);
+    setPriceTier("retail");
   };
 
   const addUnitToCart = () => {
     if (!unitSaleModal || unitQuantity <= 0) return;
-    const { name, unitPrice } = unitSaleModal;
-    const cartId = `unit-${unitSaleModal.id}`;
+    const { name } = unitSaleModal;
+    const unitPrice = getUnitSalePrice(unitSaleModal, priceTier);
+    if (unitPrice <= 0) return;
+    const tierLabel = priceTier === "wholesale" ? "Mayorista" : "Minorista";
+    const cartId = `unit-${unitSaleModal.id}-${priceTier}`;
     const item = {
       id: cartId,
-      name: `${name} (Unidad)`,
+      name: `${name} (Unidad - ${tierLabel})`,
       price: unitPrice,
-      quantity: 1, // La cantidad se maneja en el wrapper addToCart
+      quantity: 1,
     };
-    // Usamos el mismo addToCart, pero con la cantidad deseada
-    setCart(current => [...current, { ...item, quantity: unitQuantity }]);
+    setCart((current) => [...current, { ...item, quantity: unitQuantity }]);
     setUnitSaleModal(null);
+    setPriceTier("retail");
+  };
+
+  const openOtherProductModal = (product) => {
+    if (isRegisterClosed || !product) return;
+    setOtherProductQuantity(1);
+    setPriceTier("retail");
+    setOtherProductModal(product);
+  };
+
+  const addOtherProductToCart = () => {
+    if (!otherProductModal || otherProductQuantity <= 0) return;
+    const unitPrice = getUnitProductPrice(otherProductModal, priceTier);
+    if (unitPrice <= 0) return;
+    const tierLabel = priceTier === "wholesale" ? "Mayorista" : "Minorista";
+    const cartId = `other-${otherProductModal.id}-${priceTier}`;
+    setCart((current) => [...current, {
+      id: cartId,
+      name: `${otherProductModal.name} [${tierLabel}]`,
+      price: unitPrice,
+      quantity: otherProductQuantity,
+    }]);
+    setOtherProductModal(null);
+    setPriceTier("retail");
   };
 
 
@@ -224,7 +302,11 @@ export function EmployeePos() {
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const currentSubtotal = payingOrder ? payingOrder.total : cartSubtotal;
   const orderAdvanceAmount = payingOrder?.advanceAmount || 0;
+  const parsedDiscountPercent = Math.min(100, Math.max(0, nonNegative(discountPercent)));
   const {
+    orderTotal,
+    discountAmount,
+    subtotal,
     surchargePercent,
     surchargeAmount,
     total,
@@ -233,7 +315,8 @@ export function EmployeePos() {
     currentSubtotal,
     orderAdvanceAmount,
     payments[0]?.method,
-    availablePayments
+    availablePayments,
+    parsedDiscountPercent
   );
   const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   const remaining = amountDue - totalPaid;
@@ -246,7 +329,8 @@ export function EmployeePos() {
         value,
         payingOrder.total,
         orderAdvanceAmount,
-        availablePayments
+        availablePayments,
+        parsedDiscountPercent
       ));
       return;
     }
@@ -255,6 +339,20 @@ export function EmployeePos() {
     const safeValue = field === "amount" ? nonNegative(value) : value;
     newPayments[index] = { ...newPayments[index], [field]: safeValue };
     setPayments(newPayments);
+  };
+
+  const handleDiscountChange = (value) => {
+    if (!isAllowedDecimalInput(value)) return;
+    setDiscountPercent(value);
+    if (!payingOrder) return;
+    const nextDiscount = Math.min(100, Math.max(0, nonNegative(value === "" ? 0 : value)));
+    setPayments(applyDiscountChange(
+      payments,
+      payingOrder.total,
+      orderAdvanceAmount,
+      availablePayments,
+      nextDiscount
+    ));
   };
 
   const handleLoadOrder = async () => {
@@ -295,7 +393,8 @@ export function EmployeePos() {
       keepInPrep: keepInPrep
     };
     setPayingOrder(newOrder);
-    setPayments(buildInitialPayments(newOrder.total, newOrder.advanceAmount || 0, availablePayments));
+    setDiscountPercent("0");
+    setPayments(buildInitialPayments(newOrder.total, newOrder.advanceAmount || 0, availablePayments, 0));
     setModalState("payment");
   };
 
@@ -323,7 +422,8 @@ export function EmployeePos() {
 
   const handleOpenPayment = (order) => {
     setPayingOrder(order);
-    setPayments(buildInitialPayments(order.total, order.advanceAmount || 0, availablePayments));
+    setDiscountPercent("0");
+    setPayments(buildInitialPayments(order.total, order.advanceAmount || 0, availablePayments, 0));
     setModalState("payment");
   };
 
@@ -339,7 +439,19 @@ export function EmployeePos() {
       finalPayments.unshift({ method: "Seña", amount: payingOrder.advanceAmount });
     }
     const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
-    const newSale = { id: payingOrder.id, date: new Date().toISOString(), items: [...payingOrder.items], total, paymentMethod: paymentMethodStr, payments: finalPayments, employee: userName, registerNumber: "Caja 01" };
+    const newSale = {
+      id: payingOrder.id,
+      date: new Date().toISOString(),
+      items: [...payingOrder.items],
+      subtotalBeforeDiscount: orderTotal,
+      discountPercent: parsedDiscountPercent,
+      discountAmount,
+      total,
+      paymentMethod: paymentMethodStr,
+      payments: finalPayments,
+      employee: userName,
+      registerNumber: "Caja 01",
+    };
     try {
       await appendSale(newSale);
       setLastSale(newSale);
@@ -368,6 +480,7 @@ export function EmployeePos() {
 
     setModalState("success");
     setPayingOrder(null);
+    setDiscountPercent("0");
     setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
     } catch (err) {
       alert(err.message || "Error al registrar la venta. Revisa la conexión.");
@@ -534,9 +647,17 @@ export function EmployeePos() {
                 <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2"><Tag className="text-orange-500" size={20} /> Otros Productos</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {filteredOther.map((product) => (
-                    <button key={product.id} onClick={() => !isRegisterClosed && addToCart(product)} disabled={isRegisterClosed} className="flex flex-col text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-orange-400 hover:shadow-md transition-all group disabled:opacity-50">
+                    <button
+                      key={product.id}
+                      onClick={() => openOtherProductModal(product)}
+                      disabled={isRegisterClosed || product.price <= 0}
+                      className="flex flex-col text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-orange-400 hover:shadow-md transition-all group disabled:opacity-50"
+                    >
                       <span className="font-medium text-gray-900 group-hover:text-orange-600 line-clamp-2">{product.name}</span>
-                      <span className="mt-2 text-orange-500 font-bold">${product.price}</span>
+                      <span className="mt-2 text-orange-500 font-bold">${product.price.toFixed(2)}</span>
+                      {product.wholesalePrice > 0 && (
+                        <span className="text-xs text-purple-700 font-medium mt-1">Mayor: ${product.wholesalePrice.toFixed(2)}</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -547,7 +668,7 @@ export function EmployeePos() {
               <div className="py-16 flex flex-col items-center justify-center text-gray-400">
                 <LayoutGrid className="w-16 h-16 mb-4 text-gray-300" />
                 <p className="text-lg font-bold text-gray-500">No hay productos en tu catálogo</p>
-                <p className="text-sm mt-2 text-center max-w-sm">Ve a <span className="font-medium text-gray-700">Configuración</span> y haz clic en "Guardar Catálogo" para que aparezcan aquí.</p>
+                <p className="text-sm mt-2 text-center max-w-sm">Ve a <span className="font-medium text-gray-700">Configuración</span>, cargá el catálogo de miga u otros productos, y guardá los cambios.</p>
               </div>
             )}
           </div>
@@ -834,6 +955,12 @@ export function EmployeePos() {
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
                     <div className="flex justify-between"><span className="text-gray-500 flex items-center gap-2"><Receipt size={16} /> Ticket</span><span className="font-medium uppercase text-blue-600">#{lastSale.id}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Monto Total</span><span className="font-bold">${lastSale.total}</span></div>
+                    {(lastSale.discountPercent || 0) > 0 && (
+                      <div className="flex justify-between text-sm text-purple-700">
+                        <span>Descuento ({lastSale.discountPercent}%)</span>
+                        <span className="font-medium">-${(lastSale.discountAmount || 0).toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="border-t pt-3">
                       <span className="text-gray-500 text-sm block mb-2">Forma(s) de Pago</span>
                       {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between text-sm"><span>{p.method}</span><span className="font-medium">${p.amount.toFixed(2)}</span></div>) : <div className="flex justify-between"><span>{lastSale.paymentMethod}</span></div>}
@@ -883,7 +1010,7 @@ export function EmployeePos() {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-gray-50 border-b p-4 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-gray-900">Cobrar y Registrar Venta</h3>
-              <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <button onClick={() => { setModalState("none"); setPayingOrder(null); setDiscountPercent("0"); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="p-6 overflow-y-auto">
               {(payingOrder.advanceNote || payingOrder.advanceAmount > 0) && (
@@ -905,8 +1032,20 @@ export function EmployeePos() {
               <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-600 font-medium">Subtotal del Pedido</span>
-                  <span className="text-lg font-bold text-gray-900">${payingOrder.total.toFixed(2)}</span>
+                  <span className="text-lg font-bold text-gray-900">${orderTotal.toFixed(2)}</span>
                 </div>
+                {parsedDiscountPercent > 0 && (
+                  <div className="flex justify-between items-center text-purple-700 mb-2">
+                    <span>Descuento ({parsedDiscountPercent}%)</span>
+                    <span className="font-bold">-${discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {parsedDiscountPercent > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-600 font-medium">Subtotal con descuento</span>
+                    <span className="font-bold text-gray-900">${subtotal.toFixed(2)}</span>
+                  </div>
+                )}
                 {payingOrder.advanceAmount > 0 && (
                   <div className="flex justify-between items-center text-green-600 mb-2">
                     <span>Adelanto / Seña</span>
@@ -922,6 +1061,20 @@ export function EmployeePos() {
                 <div className="flex justify-between items-center pt-3 border-t border-blue-200">
                   <span className="text-gray-900 font-bold">Total a Cobrar</span>
                   <span className="text-2xl font-black text-blue-700">${amountDue.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Descuento (%)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={discountPercent}
+                    onChange={(e) => handleDiscountChange(e.target.value)}
+                    className="w-full pr-8 pl-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
                 </div>
               </div>
               <div className="mb-4">
@@ -957,7 +1110,8 @@ export function EmployeePos() {
                             index,
                             payingOrder.total,
                             orderAdvanceAmount,
-                            availablePayments
+                            availablePayments,
+                            parsedDiscountPercent
                           ))}
                           className="p-2 text-gray-400 hover:text-red-600"
                         >
@@ -976,7 +1130,7 @@ export function EmployeePos() {
               </div>
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3 shrink-0">
-              <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => { setModalState("none"); setPayingOrder(null); setDiscountPercent("0"); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
               <button onClick={handleRegisterSale} disabled={totalPaid < amountDue} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < amountDue ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
             </div>
           </div>
@@ -993,6 +1147,38 @@ export function EmployeePos() {
 
             <div className="p-6 overflow-y-auto flex-1">
               <p className="text-center text-gray-600 mb-4">¿Con qué acompañamiento se preparará <strong>{pendingMigaProduct.name}</strong>?</p>
+
+              {pendingMigaProduct && (
+                <div className="mb-6 bg-purple-50/70 p-4 rounded-xl border border-purple-100">
+                  <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Tipo de Precio</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPriceTier("retail")}
+                      className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                        priceTier === "retail"
+                          ? "bg-blue-600 text-white border-blue-700 shadow-sm"
+                          : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
+                      }`}
+                    >
+                      Minorista
+                      <span className="block text-xs font-semibold mt-1">${(pendingMigaProduct.retailPrice || 0).toFixed(2)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPriceTier("wholesale")}
+                      className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                        priceTier === "wholesale"
+                          ? "bg-purple-600 text-white border-purple-700 shadow-sm"
+                          : "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"
+                      }`}
+                    >
+                      Mayorista
+                      <span className="block text-xs font-semibold mt-1">${(pendingMigaProduct.wholesalePrice || 0).toFixed(2)}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Selección de huevo */}
               <div className="mb-6 bg-orange-50/50 p-4 rounded-xl border border-orange-100">
@@ -1181,12 +1367,41 @@ export function EmployeePos() {
             </div>
             <div className="p-6">
               <p className="text-center text-lg font-semibold mb-6">¿Cómo deseas vender <span className="text-blue-600">{unitSaleModal.name}</span>?</p>
+              <div className="mb-6 bg-purple-50/70 p-4 rounded-xl border border-purple-100">
+                <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Tipo de Precio (Unidad)</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPriceTier("retail")}
+                    className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                      priceTier === "retail"
+                        ? "bg-blue-600 text-white border-blue-700 shadow-sm"
+                        : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
+                    }`}
+                  >
+                    Minorista
+                    <span className="block text-xs font-semibold mt-1">${getUnitSalePrice(unitSaleModal, "retail").toFixed(2)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriceTier("wholesale")}
+                    className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                      priceTier === "wholesale"
+                        ? "bg-purple-600 text-white border-purple-700 shadow-sm"
+                        : "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"
+                    }`}
+                  >
+                    Mayorista
+                    <span className="block text-xs font-semibold mt-1">${getUnitSalePrice(unitSaleModal, "wholesale").toFixed(2)}</span>
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Opción por Unidad */}
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex flex-col items-center justify-center">
                   <h4 className="font-bold text-blue-800 text-lg mb-3">Por Unidad</h4>
-                  <p className="text-3xl font-black text-blue-900 mb-1">${(unitSaleModal.unitPrice || 0).toFixed(2)}</p>
-                  {(unitSaleModal.unitPrice || 0) <= 0 && (
+                  <p className="text-3xl font-black text-blue-900 mb-1">${getUnitSalePrice(unitSaleModal, priceTier).toFixed(2)}</p>
+                  {getUnitSalePrice(unitSaleModal, priceTier) <= 0 && (
                     <p className="text-xs text-orange-600 mb-3 text-center">Configurá el precio en Configuración → Guardar Catálogo</p>
                   )}
                   <div className="flex items-center gap-2">
@@ -1201,8 +1416,8 @@ export function EmployeePos() {
                   </div>
                   <button
                     onClick={addUnitToCart}
-                    disabled={(unitSaleModal.unitPrice || 0) <= 0}
-                    className={`mt-5 w-full font-medium py-2 rounded-lg ${(unitSaleModal.unitPrice || 0) <= 0 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                    disabled={getUnitSalePrice(unitSaleModal, priceTier) <= 0}
+                    className={`mt-5 w-full font-medium py-2 rounded-lg ${getUnitSalePrice(unitSaleModal, priceTier) <= 0 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                   >
                     Agregar {unitQuantity} {unitQuantity > 1 ? 'unidades' : 'unidad'}
                   </button>
@@ -1222,12 +1437,82 @@ export function EmployeePos() {
                         className="w-full flex justify-between items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 hover:border-gray-400"
                       >
                         <span className="font-medium">{pres.name}</span>
-                        <span className="font-bold text-gray-800">${pres.price.toFixed(2)}</span>
+                        <div className="text-right">
+                          <span className="font-bold text-gray-800 block">${pres.price.toFixed(2)}</span>
+                          <span className="text-xs text-purple-700 font-semibold">Mayor: ${(pres.wholesalePrice || 0).toFixed(2)}</span>
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {otherProductModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="bg-orange-50 border-b border-orange-100 p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Tag className="text-orange-500" size={20} /> {otherProductModal.name}
+              </h3>
+              <button onClick={() => setOtherProductModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPriceTier("retail")}
+                  className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                    priceTier === "retail"
+                      ? "bg-orange-600 text-white border-orange-700 shadow-sm"
+                      : "bg-white text-orange-700 border-orange-200 hover:bg-orange-50"
+                  }`}
+                >
+                  Minorista
+                  <span className="block text-xs font-semibold mt-1">${getUnitProductPrice(otherProductModal, "retail").toFixed(2)}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPriceTier("wholesale")}
+                  disabled={getUnitProductPrice(otherProductModal, "wholesale") <= 0}
+                  className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                    getUnitProductPrice(otherProductModal, "wholesale") <= 0
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                      : priceTier === "wholesale"
+                        ? "bg-purple-600 text-white border-purple-700 shadow-sm"
+                        : "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"
+                  }`}
+                >
+                  Mayorista
+                  <span className="block text-xs font-semibold mt-1">${getUnitProductPrice(otherProductModal, "wholesale").toFixed(2)}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center gap-3">
+                <button onClick={() => setOtherProductQuantity((q) => Math.max(1, q - 1))} className="w-10 h-10 bg-orange-100 text-orange-800 rounded-full font-bold">-</button>
+                <input
+                  type="number"
+                  value={otherProductQuantity}
+                  onChange={(e) => setOtherProductQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-20 text-center font-bold text-xl bg-transparent border-b-2 border-orange-300 focus:outline-none"
+                />
+                <button onClick={() => setOtherProductQuantity((q) => q + 1)} className="w-10 h-10 bg-orange-100 text-orange-800 rounded-full font-bold">+</button>
+              </div>
+
+              <button
+                onClick={addOtherProductToCart}
+                disabled={getUnitProductPrice(otherProductModal, priceTier) <= 0}
+                className={`w-full font-bold py-3 rounded-lg ${
+                  getUnitProductPrice(otherProductModal, priceTier) <= 0
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-orange-600 text-white hover:bg-orange-700"
+                }`}
+              >
+                Agregar {otherProductQuantity} {otherProductQuantity > 1 ? "unidades" : "unidad"}
+              </button>
             </div>
           </div>
         </div>
