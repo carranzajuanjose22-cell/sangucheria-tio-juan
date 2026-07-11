@@ -4,7 +4,7 @@ import { api } from "./api.js";
 import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
 import {
   isUnitSaleVariety,
-  isPebeteVariety,
+  usesUnitRecipe,
   getUnitManufacturingCost,
   normalizeMigaCatalog,
 } from "../utils/migaCatalog.js";
@@ -21,9 +21,11 @@ function createMigaTemplate(withUnitPrices = false) {
     if (withUnitPrices && isUnitSaleVariety(name)) {
       return {
         ...base,
+        unitSaleEnabled: true,
+        unitCostFromRecipe: usesUnitRecipe({ name }),
         unitPrice: 0,
         unitWholesalePrice: 0,
-        ...(isPebeteVariety(name) ? { unitRecipe: [] } : {}),
+        ...(usesUnitRecipe({ name }) ? { unitRecipe: [] } : {}),
       };
     }
     return base;
@@ -181,7 +183,7 @@ function VarietyCard({
               </tbody>
             </table>
           </div>
-          {isUnitSaleVariety(variety.name) && (
+          {isUnitSaleVariety(variety) && (
             <div className="p-4 bg-blue-50/40 border-t border-blue-100 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -245,8 +247,8 @@ function VarietyCard({
                 <div>
                   <span className="font-semibold text-gray-700 block">Costo de fabricación (1 unidad):</span>
                   <span className="text-xs text-gray-500">
-                    {isPebeteVariety(variety.name)
-                      ? "Receta propia de 1 pebete"
+                    {usesUnitRecipe(variety)
+                      ? "Receta propia de 1 unidad"
                       : "Igual al costo de Plancha de 3 (mínimo de producción)"}
                   </span>
                 </div>
@@ -254,7 +256,7 @@ function VarietyCard({
                   <span className="font-bold text-gray-900 text-lg">
                     ${getUnitManufacturingCost(variety, calculateRecipeCost).toFixed(2)}
                   </span>
-                  {isPebeteVariety(variety.name) && (
+                  {usesUnitRecipe(variety) && (
                     <button
                       onClick={() => openUnitRecipeModal(variety.id, variety)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 rounded-lg text-sm font-medium"
@@ -334,6 +336,11 @@ export function ProductBuilder({ customInputs = [] }) {
   const [newVarName, setNewVarName] = useState("");
   const [newVarPrices, setNewVarPrices] = useState({ docena: "", media: "", plancha: "" });
   const [newVarIngredients, setNewVarIngredients] = useState([{ insumoId: "", quantity: "" }]);
+  const [newVarUnitSale, setNewVarUnitSale] = useState(false);
+  const [newVarPebeteType, setNewVarPebeteType] = useState(true);
+  const [newVarUnitPrice, setNewVarUnitPrice] = useState("");
+  const [newVarUnitWholesalePrice, setNewVarUnitWholesalePrice] = useState("");
+  const [newVarUnitRecipe, setNewVarUnitRecipe] = useState([{ insumoId: "", quantity: "" }]);
 
   const updateProduct = (newProduct) => {
     setProduct(newProduct);
@@ -525,9 +532,23 @@ export function ProductBuilder({ customInputs = [] }) {
     return insumo.costPerUnit * qty;
   };
 
+  const resetAddVarietyForm = () => {
+    setNewVarName("");
+    setNewVarPrices({ docena: "", media: "", plancha: "" });
+    setNewVarIngredients([{ insumoId: "", quantity: "" }]);
+    setNewVarUnitSale(false);
+    setNewVarPebeteType(true);
+    setNewVarUnitPrice("");
+    setNewVarUnitWholesalePrice("");
+    setNewVarUnitRecipe([{ insumoId: "", quantity: "" }]);
+  };
+
   const handleSaveNewVariety = () => {
     if (!product || !newVarName.trim()) { alert("Por favor, ingresa el nombre de la variedad."); return; }
     const recipe = newVarIngredients.filter((ing) => ing.insumoId && nonNegative(ing.quantity) > 0).map((ing) => ({ insumoId: ing.insumoId, quantity: nonNegative(ing.quantity) }));
+    const unitRecipe = newVarUnitRecipe.filter((ing) => ing.insumoId && nonNegative(ing.quantity) > 0).map((ing) => ({ insumoId: ing.insumoId, quantity: nonNegative(ing.quantity) }));
+    const unitSaleEnabled = newVarUnitSale || isUnitSaleVariety(newVarName.trim());
+    const unitCostFromRecipe = unitSaleEnabled && (newVarPebeteType || usesUnitRecipe({ name: newVarName.trim() }));
     const rnd = () => Math.random().toString(36).substr(2, 9);
     const templatePresentations = product.varieties.length > 0
       ? product.varieties[0].presentations.map((p) => {
@@ -548,13 +569,16 @@ export function ProductBuilder({ customInputs = [] }) {
       id: rnd(),
       name: newVarName.trim(),
       presentations: templatePresentations,
-      ...(isUnitSaleVariety(newVarName.trim()) ? {
-        unitPrice: 0,
-        unitWholesalePrice: 0,
-        ...(isPebeteVariety(newVarName.trim()) ? { unitRecipe: [] } : {}),
+      ...(unitSaleEnabled ? {
+        unitSaleEnabled: true,
+        unitCostFromRecipe,
+        unitPrice: nonNegative(newVarUnitPrice),
+        unitWholesalePrice: nonNegative(newVarUnitWholesalePrice),
+        ...(unitCostFromRecipe ? { unitRecipe } : {}),
       } : {}),
     }] });
     setIsAddVarietyOpen(false);
+    resetAddVarietyForm();
   };
 
   return (
@@ -567,7 +591,7 @@ export function ProductBuilder({ customInputs = [] }) {
               <button onClick={handleResetTemplate} className="flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-lg font-medium hover:bg-red-200">
                 <RotateCcw size={18} /> Restaurar Plantilla
               </button>
-              <button onClick={() => { setNewVarName(""); setNewVarPrices({ docena: "", media: "", plancha: "" }); setNewVarIngredients([{ insumoId: "", quantity: "" }]); setIsAddVarietyOpen(true); }} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-medium hover:bg-blue-200">
+              <button onClick={() => { resetAddVarietyForm(); setIsAddVarietyOpen(true); }} className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-medium hover:bg-blue-200">
                 <Plus size={18} /> Añadir Variedad
               </button>
               <button onClick={handleSaveCatalog} className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-medium transition-colors ${hasUnsavedChanges ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-600 hover:bg-green-700'}`}>
@@ -670,7 +694,145 @@ export function ProductBuilder({ customInputs = [] }) {
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la Variedad</label>
-                <input type="text" required autoFocus placeholder="Ej. Roquefort, Vegetariano" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={newVarName} onChange={(e) => setNewVarName(e.target.value)} />
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Ej. Pebete de Jamón, Roquefort"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={newVarName}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setNewVarName(name);
+                    if (isUnitSaleVariety(name) && !newVarUnitSale) {
+                      setNewVarUnitSale(true);
+                      if (usesUnitRecipe({ name })) setNewVarPebeteType(true);
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="bg-green-50/70 p-4 rounded-xl border border-green-100 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 text-green-600 border-gray-300 rounded"
+                    checked={newVarUnitSale}
+                    onChange={(e) => setNewVarUnitSale(e.target.checked)}
+                  />
+                  <span>
+                    <span className="block text-sm font-bold text-gray-900">Venta por unidad</span>
+                    <span className="block text-xs text-gray-600 mt-0.5">
+                      Habilita la columna &quot;Unidad&quot; en el POS para vender de a 1.
+                    </span>
+                  </span>
+                </label>
+
+                {newVarUnitSale && (
+                  <>
+                    <label className="flex items-start gap-3 cursor-pointer pl-7">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 text-green-600 border-gray-300 rounded"
+                        checked={newVarPebeteType}
+                        onChange={(e) => setNewVarPebeteType(e.target.checked)}
+                      />
+                      <span>
+                        <span className="block text-sm font-bold text-gray-900">Tipo Pebete (receta propia por unidad)</span>
+                        <span className="block text-xs text-gray-600 mt-0.5">
+                          Costo y receta de 1 unidad independientes. Si no marcás, el costo unitario se calcula como Paleta (Plancha de 3).
+                        </span>
+                      </span>
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-3 pl-7">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Precio unitario minorista</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500"
+                          value={newVarUnitPrice}
+                          onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setNewVarUnitPrice(e.target.value); }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Precio unitario mayorista</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500"
+                          value={newVarUnitWholesalePrice}
+                          onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setNewVarUnitWholesalePrice(e.target.value); }}
+                        />
+                      </div>
+                    </div>
+
+                    {newVarPebeteType && (
+                      <div className="space-y-2 pl-7 pt-2 border-t border-green-100">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-sm font-bold text-gray-900">Receta de 1 unidad (costo Pebete)</label>
+                          <button
+                            type="button"
+                            onClick={() => setNewVarUnitRecipe([...newVarUnitRecipe, { insumoId: "", quantity: "" }])}
+                            className="text-xs font-medium text-green-700 hover:text-green-900 flex items-center bg-green-100 px-2 py-1 rounded-md"
+                          >
+                            <Plus className="w-3 h-3 mr-1" /> Añadir Insumo
+                          </button>
+                        </div>
+                        {newVarUnitRecipe.map((ing, idx) => (
+                          <div key={idx} className="flex gap-2 items-start">
+                            <div className="flex-1">
+                              <select
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white outline-none focus:border-green-500"
+                                value={ing.insumoId}
+                                onChange={(e) => {
+                                  const next = [...newVarUnitRecipe];
+                                  next[idx].insumoId = e.target.value;
+                                  setNewVarUnitRecipe(next);
+                                }}
+                              >
+                                <option value="">Selecciona insumo...</option>
+                                {availableInsumos.map((i) => (
+                                  <option key={i.id} value={i.id}>{i.name} (${i.costPerUnit.toFixed(2)}/{i.unitMeasure})</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="w-24">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder="Cant."
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500"
+                                value={ing.quantity}
+                                onChange={(e) => {
+                                  if (!isAllowedNumberInput(e.target.value)) return;
+                                  const next = [...newVarUnitRecipe];
+                                  next[idx].quantity = e.target.value;
+                                  setNewVarUnitRecipe(next);
+                                }}
+                              />
+                            </div>
+                            {newVarUnitRecipe.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setNewVarUnitRecipe(newVarUnitRecipe.filter((_, i) => i !== idx))}
+                                className="mt-1 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
               <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                 <h4 className="text-sm font-bold text-blue-900 mb-3">Precios de Venta (Opcional)</h4>

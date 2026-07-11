@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
-import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow } from "lucide-react";
+import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow, Gift } from "lucide-react";
 import { api } from "./api.js";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 import {
@@ -17,6 +17,7 @@ import {
   normalizeMigaCatalog,
 } from "../utils/migaCatalog.js";
 import { getUnitProductPrice, normalizeUnitProductsCatalog } from "../utils/unitProductsCatalog.js";
+import { getPromotionSummaryLabel, normalizePromotionsCatalog } from "../utils/promotionsCatalog.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister, appendSale } from "../utils/register.js";
 
@@ -51,6 +52,7 @@ export function EmployeePos() {
   const [expenseAmount, setExpenseAmount] = useState("");
   const [migaMatrix, setMigaMatrix] = useState([]);
   const [otherProducts, setOtherProducts] = useState([]);
+  const [promotions, setPromotions] = useState([]);
   const [migaTitle, setMigaTitle] = useState("Sándwiches de Miga");
   const [migaHeaders, setMigaHeaders] = useState(["Docena", "Media Docena", "Plancha de 3"]);
   const [migaOptionModal, setMigaOptionModal] = useState(false);
@@ -172,13 +174,57 @@ export function EmployeePos() {
     };
   }, []);
 
+  useEffect(() => {
+    const applyPromotions = (parsed) => {
+      setPromotions(normalizePromotionsCatalog(parsed).promotions);
+    };
+
+    const loadPromotionsFromApi = async () => {
+      try {
+        const data = await api.get("/catalog/PROMOCIONES");
+        localStorage.setItem("pos_promotions", JSON.stringify(data));
+        applyPromotions(data);
+      } catch {
+        const saved = localStorage.getItem("pos_promotions");
+        if (saved) applyPromotions(JSON.parse(saved));
+        else setPromotions([]);
+      }
+    };
+
+    loadPromotionsFromApi();
+    const interval = setInterval(loadPromotionsFromApi, 30000);
+    const onCatalogUpdate = () => loadPromotionsFromApi();
+    window.addEventListener("catalog-updated", onCatalogUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("catalog-updated", onCatalogUpdate);
+    };
+  }, []);
+
   const currentDate = new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const isRegisterClosed = !registerState?.isOpen;
   const totalSalesToday = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalExpensesToday = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const filteredMiga = migaMatrix.filter((row) => row.variety.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredOther = otherProducts.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const hasUnitSaleVarieties = migaMatrix.some((row) => isUnitSaleVariety(row.variety));
+  const filteredPromotions = promotions.filter((p) =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    || getPromotionSummaryLabel(p).toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const hasUnitSaleVarieties = migaMatrix.some((row) => isUnitSaleVariety(row.varietyData || row.variety));
+
+  const addPromotionToCart = (promotion) => {
+    if (isRegisterClosed || !promotion || promotion.price <= 0) return;
+    const summary = getPromotionSummaryLabel(promotion);
+    setCart((current) => [...current, {
+      id: `promo-${promotion.id}-${Date.now()}`,
+      name: `${promotion.name} (${summary})`,
+      price: promotion.price,
+      quantity: 1,
+      isPromotion: true,
+      promotionId: promotion.id,
+    }]);
+  };
 
   const addToCart = (product) => {
     setCart((current) => {
@@ -215,7 +261,7 @@ export function EmployeePos() {
   const handleVarietyClick = (variety, presentationName) => {
     if (isRegisterClosed) return;
 
-    if (isUnitSaleVariety(variety.name)) {
+    if (isUnitSaleVariety(variety)) {
       openUnitSaleModal(variety);
       return;
     }
@@ -597,7 +643,7 @@ export function EmployeePos() {
                                 <button
                                   onClick={() => {
                                     if (isRegisterClosed) return;
-                                    if (fullVariety && isUnitSaleVariety(fullVariety.name)) {
+                                    if (fullVariety && isUnitSaleVariety(fullVariety)) {
                                       openPresentationOptions(fullVariety, pres);
                                     } else if (fullVariety) {
                                       handleVarietyClick(fullVariety, pres);
@@ -620,7 +666,7 @@ export function EmployeePos() {
                           })}
                           {hasUnitSaleVarieties && (
                             <td className="px-2 py-2 align-middle">
-                              {isUnitSaleVariety(row.variety) ? (
+                              {isUnitSaleVariety(migaMatrix.find(m => m.variety === row.variety)?.varietyData || row.variety) ? (
                                 <button
                                   onClick={() => openUnitSaleModal(migaMatrix.find(m => m.variety === row.variety)?.varietyData)}
                                   disabled={isRegisterClosed}
@@ -638,6 +684,28 @@ export function EmployeePos() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {filteredPromotions.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
+                  <Gift className="text-pink-500" size={20} /> Promociones
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredPromotions.map((promo) => (
+                    <button
+                      key={promo.id}
+                      onClick={() => addPromotionToCart(promo)}
+                      disabled={isRegisterClosed || promo.price <= 0}
+                      className="flex flex-col text-left p-4 rounded-xl border-2 border-pink-200 bg-pink-50/40 hover:border-pink-400 hover:shadow-md transition-all group disabled:opacity-50"
+                    >
+                      <span className="font-bold text-gray-900 group-hover:text-pink-700">{promo.name}</span>
+                      <span className="text-xs text-gray-600 mt-1 line-clamp-2">{getPromotionSummaryLabel(promo)}</span>
+                      <span className="mt-3 text-pink-600 font-black text-lg">${promo.price.toFixed(2)}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -664,7 +732,7 @@ export function EmployeePos() {
               </div>
             )}
 
-            {filteredMiga.length === 0 && filteredOther.length === 0 && (
+            {filteredMiga.length === 0 && filteredOther.length === 0 && filteredPromotions.length === 0 && (
               <div className="py-16 flex flex-col items-center justify-center text-gray-400">
                 <LayoutGrid className="w-16 h-16 mb-4 text-gray-300" />
                 <p className="text-lg font-bold text-gray-500">No hay productos en tu catálogo</p>

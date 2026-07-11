@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { ProductBuilder } from "../pages/ProductBuilder.jsx";
 import { UnitProductsBuilder } from "../pages/UnitProductsBuilder.jsx";
+import { PromotionsBuilder } from "../pages/PromotionsBuilder.jsx";
 import { api } from "../pages/api.js";
 import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
 
@@ -233,6 +234,8 @@ export function ParametersTab() {
       <ProductBuilder customInputs={inputs} />
 
       <UnitProductsBuilder />
+
+      <PromotionsBuilder />
 
       {activeModal === "service" && (
         <ServiceModal

@@ -1,6 +1,17 @@
-export function isUnitSaleVariety(name = "") {
+function resolveVariety(input) {
+  if (input && typeof input === "object" && "name" in input) return input;
+  return { name: String(input || "") };
+}
+
+function isUnitSaleVarietyByName(name = "") {
   const normalized = name.toLowerCase();
   return normalized.includes("paleta") || normalized.includes("pebete");
+}
+
+export function isUnitSaleVariety(input) {
+  const variety = resolveVariety(input);
+  if (variety.unitSaleEnabled) return true;
+  return isUnitSaleVarietyByName(variety.name);
 }
 
 export function isPebeteVariety(name = "") {
@@ -9,6 +20,12 @@ export function isPebeteVariety(name = "") {
 
 export function isPaletaVariety(name = "") {
   return name.toLowerCase().includes("paleta");
+}
+
+export function usesUnitRecipe(input) {
+  const variety = resolveVariety(input);
+  if (variety.unitCostFromRecipe) return true;
+  return isPebeteVariety(variety.name);
 }
 
 export function getPresentationPrice(presentation, tier = "retail") {
@@ -39,10 +56,10 @@ export function getPaletaUnitCost(variety, calculateRecipeCost) {
 
 export function getUnitManufacturingCost(variety, calculateRecipeCost) {
   if (!variety) return 0;
-  if (isPebeteVariety(variety.name)) {
+  if (usesUnitRecipe(variety)) {
     return calculateRecipeCost(variety.unitRecipe || []);
   }
-  if (isPaletaVariety(variety.name)) {
+  if (isPaletaVariety(variety.name) || isUnitSaleVariety(variety)) {
     return getPaletaUnitCost(variety, calculateRecipeCost);
   }
   return 0;
@@ -60,7 +77,7 @@ function normalizePresentation(p) {
 export function normalizeMigaCatalog(product) {
   if (!product?.varieties) return product;
 
-  const hasPebete = product.varieties.some((v) => isPebeteVariety(v.name));
+  const hasPebete = product.varieties.some((v) => isPebeteVariety(v.name) || v.unitCostFromRecipe);
   let varieties = [...product.varieties];
 
   if (!hasPebete) {
@@ -81,6 +98,8 @@ export function normalizeMigaCatalog(product) {
       id: crypto.randomUUID(),
       name: "Pebete",
       presentations: template,
+      unitSaleEnabled: true,
+      unitCostFromRecipe: true,
       unitPrice: 0,
       unitWholesalePrice: 0,
       unitRecipe: [],
@@ -93,16 +112,27 @@ export function normalizeMigaCatalog(product) {
       presentations: (variety.presentations || []).map(normalizePresentation),
     };
 
-    if (!isUnitSaleVariety(variety.name)) {
-      const { unitPrice, unitWholesalePrice, unitRecipe, ...rest } = normalized;
+    if (!isUnitSaleVariety(variety)) {
+      const {
+        unitPrice,
+        unitWholesalePrice,
+        unitRecipe,
+        unitSaleEnabled,
+        unitCostFromRecipe,
+        ...rest
+      } = normalized;
       return rest;
     }
 
+    const unitCostFromRecipe = usesUnitRecipe(variety);
+
     return {
       ...normalized,
+      unitSaleEnabled: true,
+      unitCostFromRecipe,
       unitPrice: typeof variety.unitPrice === "number" ? variety.unitPrice : 0,
       unitWholesalePrice: typeof variety.unitWholesalePrice === "number" ? variety.unitWholesalePrice : 0,
-      unitRecipe: isPebeteVariety(variety.name) ? (variety.unitRecipe || []) : undefined,
+      unitRecipe: unitCostFromRecipe ? (variety.unitRecipe || []) : undefined,
     };
   });
 
