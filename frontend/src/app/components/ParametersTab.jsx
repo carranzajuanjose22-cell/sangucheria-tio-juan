@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Plus, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { ProductBuilder } from "../pages/ProductBuilder.jsx";
 import { UnitProductsBuilder } from "../pages/UnitProductsBuilder.jsx";
@@ -150,10 +150,10 @@ export function ParametersTab() {
                 <td className="px-6 py-4 text-sm text-gray-900">{s.name}</td>
                 <td className="px-6 py-4 text-sm text-gray-900">${s.cost}</td>
                 <td className="px-6 py-4 text-sm font-medium text-right">
-                  <button onClick={() => openModal("service", s.id)} className="text-blue-600 hover:text-blue-900 mr-3 inline-block">
+                  <button onClick={() => openModal("service", s.id)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDeleteService(s.id)} className="text-red-600 hover:text-red-900 inline-block">
+                  <button onClick={() => handleDeleteService(s.id)} className="text-brand-1 hover:text-brand-1-dark inline-block">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </td>
@@ -178,7 +178,7 @@ export function ParametersTab() {
                 <td className="px-6 py-4 text-sm text-gray-900">{p.name}</td>
                 <td className="px-6 py-4 text-sm text-gray-900">
                   {p.surcharge > 0 ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-4 text-brand-1-dark">
                       +{p.surcharge}%
                     </span>
                   ) : (
@@ -186,10 +186,10 @@ export function ParametersTab() {
                   )}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-right">
-                  <button onClick={() => openModal("payment", p.id)} className="text-blue-600 hover:text-blue-900 mr-3 inline-block">
+                  <button onClick={() => openModal("payment", p.id)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDeletePayment(p.id)} className="text-red-600 hover:text-red-900 inline-block">
+                  <button onClick={() => handleDeletePayment(p.id)} className="text-brand-1 hover:text-brand-1-dark inline-block">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </td>
@@ -218,10 +218,10 @@ export function ParametersTab() {
                   ${i.price} {i.isFood ? "/ Kg" : "/ Unidad"}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-right">
-                  <button onClick={() => openModal("input", i.id)} className="text-blue-600 hover:text-blue-900 mr-3 inline-block">
+                  <button onClick={() => openModal("input", i.id)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDeleteInput(i.id)} className="text-red-600 hover:text-red-900 inline-block">
+                  <button onClick={() => handleDeleteInput(i.id)} className="text-brand-1 hover:text-brand-1-dark inline-block">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </td>
@@ -289,7 +289,7 @@ function ParameterSection({ title, onAdd, isEmpty, children, defaultOpen = false
             e.stopPropagation();
             onAdd();
           }}
-          className="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          className="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark"
         >
           <Plus className="w-4 h-4 mr-1" /> Agregar
         </button>
@@ -347,7 +347,7 @@ function ServiceModal({ onClose, onSave, initialData }) {
           <input required type="number" step="0.01" min="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={cost} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setCost(e.target.value); }} />
         </div>
         <div className="pt-4 flex justify-end">
-          <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+          <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark">
             {initialData ? "Guardar Cambios" : "Registrar"}
           </button>
         </div>
@@ -379,7 +379,7 @@ function PaymentModal({ onClose, onSave, initialData }) {
           <p className="mt-1 text-xs text-gray-500">Ingresa 0 si no hay recargo.</p>
         </div>
         <div className="pt-4 flex justify-end">
-          <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+          <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark">
             {initialData ? "Guardar Cambios" : "Registrar"}
           </button>
         </div>
@@ -407,7 +407,7 @@ function InputModal({ onClose, onSave, initialData }) {
           <input required type="text" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="flex items-center py-2">
-          <input id="isFoodToggle" type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer" checked={isFood} onChange={(e) => setIsFood(e.target.checked)} />
+          <input id="isFoodToggle" type="checkbox" className="h-4 w-4 text-brand-1 border-gray-300 rounded cursor-pointer" checked={isFood} onChange={(e) => setIsFood(e.target.checked)} />
           <label htmlFor="isFoodToggle" className="ml-2 block text-sm text-gray-900 cursor-pointer">
             Es insumo alimenticio (Se pesa en Kg/Gramos)
           </label>
@@ -417,7 +417,7 @@ function InputModal({ onClose, onSave, initialData }) {
           <input required type="number" step="0.01" min="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={price} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setPrice(e.target.value); }} />
         </div>
         <div className="pt-4 flex justify-end">
-          <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+          <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark">
             {initialData ? "Guardar Cambios" : "Registrar"}
           </button>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { Gift, Plus, Save, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { api } from "./api.js";
 import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
@@ -177,10 +177,10 @@ export function PromotionsBuilder() {
             setIsOpen((open) => !open);
           }
         }}
-        className={`px-6 py-4 flex items-center justify-between bg-pink-50/50 cursor-pointer hover:bg-pink-100/50 transition-colors ${isOpen ? "border-b border-gray-200" : ""}`}
+        className={`px-6 py-4 flex items-center justify-between bg-brand-4/50 cursor-pointer hover:bg-brand-4/70 transition-colors ${isOpen ? "border-b border-gray-200" : ""}`}
       >
         <div className="flex items-center gap-3">
-          <Gift className="text-pink-500" size={20} />
+          <Gift className="text-brand-1" size={20} />
           <h2 className="text-lg font-medium text-gray-900">Promociones</h2>
           <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
         </div>
@@ -190,7 +190,7 @@ export function PromotionsBuilder() {
             openModal(null);
           }}
           disabled={sellableItems.length < 2}
-          className="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-pink-600 rounded-lg hover:bg-pink-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           <Plus className="w-4 h-4 mr-1" /> Agregar
         </button>
@@ -204,14 +204,14 @@ export function PromotionsBuilder() {
             </p>
             <button
               onClick={handleSave}
-              className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shrink-0 ${hasUnsavedChanges ? "bg-orange-500 hover:bg-orange-600" : "bg-green-600 hover:bg-green-700"}`}
+              className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shrink-0 ${hasUnsavedChanges ? "bg-brand-1 hover:bg-brand-1-dark" : "bg-green-600 hover:bg-green-700"}`}
             >
               <Save size={16} /> {hasUnsavedChanges ? "Guardar Promociones *" : "Guardar Promociones"}
             </button>
           </div>
 
           {sellableItems.length < 2 && (
-            <div className="px-6 py-4 text-sm text-amber-700 bg-amber-50 border-b border-amber-100">
+            <div className="px-6 py-4 text-sm text-brand-1-dark bg-brand-4 border-b border-brand-3/30">
               Cargá al menos 2 productos en el catálogo de miga u otros productos antes de crear promociones.
             </div>
           )}
@@ -238,7 +238,7 @@ export function PromotionsBuilder() {
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">{promo.name}</td>
                       <td className="px-6 py-4 text-sm text-gray-600 max-w-md">{getPromotionSummaryLabel(promo)}</td>
                       <td className="px-6 py-4 text-sm">
-                        <span className="font-bold text-pink-700">${promo.price.toFixed(2)}</span>
+                        <span className="font-bold text-brand-1-dark">${promo.price.toFixed(2)}</span>
                         {regular > promo.price && (
                           <span className="block text-xs text-green-600 mt-0.5">
                             Ahorro ${(regular - promo.price).toFixed(2)} (antes ${regular.toFixed(2)})
@@ -246,10 +246,10 @@ export function PromotionsBuilder() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-right">
-                        <button onClick={() => openModal(promo)} className="text-blue-600 hover:text-blue-900 mr-3 inline-block">
+                        <button onClick={() => openModal(promo)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(promo.id)} className="text-red-600 hover:text-red-900 inline-block">
+                        <button onClick={() => handleDelete(promo.id)} className="text-brand-1 hover:text-brand-1-dark inline-block">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
@@ -334,7 +334,7 @@ export function PromotionsBuilder() {
                         <button
                           type="button"
                           onClick={() => setForm({ ...form, components: form.components.filter((_, i) => i !== index) })}
-                          className="p-2 text-gray-400 hover:text-red-600"
+                          className="p-2 text-gray-400 hover:text-brand-1"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -345,7 +345,7 @@ export function PromotionsBuilder() {
                 <button
                   type="button"
                   onClick={() => setForm({ ...form, components: [...form.components, emptyComponent()] })}
-                  className="mt-2 text-xs font-medium text-pink-700 hover:text-pink-900 flex items-center gap-1"
+                  className="mt-2 text-xs font-medium text-brand-1-dark hover:text-brand-1-dark flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" /> Agregar otro producto
                 </button>
@@ -365,7 +365,7 @@ export function PromotionsBuilder() {
               </div>
 
               {previewComponents.length >= 2 && (
-                <div className="bg-pink-50 border border-pink-100 rounded-lg p-3 text-sm">
+                <div className="bg-brand-4/50 border border-brand-4 rounded-lg p-3 text-sm">
                   <p className="text-gray-700">
                     <span className="font-medium">Precio normal:</span> ${previewRegular.toFixed(2)}
                   </p>
@@ -384,7 +384,7 @@ export function PromotionsBuilder() {
                 <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
                   Cancelar
                 </button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-pink-600 rounded-lg hover:bg-pink-700">
+                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark">
                   {editingId ? "Guardar Cambios" : "Crear Promoción"}
                 </button>
               </div>

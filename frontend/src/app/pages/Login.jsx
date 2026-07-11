@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Lock, Mail, UserCircle2 } from "lucide-react";
 import { api } from "./api.js";
@@ -46,19 +46,19 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-4 to-brand-3/40 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-blue-600 p-8 text-center">
+        <div className="bg-brand-1 p-8 text-center">
           <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4">
             <UserCircle2 className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Bienvenido</h2>
-          <p className="text-blue-100 text-sm">Ingresa a tu cuenta para continuar</p>
+          <p className="text-brand-4 text-sm">Ingresa a tu cuenta para continuar</p>
         </div>
 
         <div className="p-8">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-brand-1/10 border border-brand-1/25 rounded-lg text-brand-1-dark text-sm">
               {error}
             </div>
           )}
@@ -74,7 +74,7 @@ export function Login() {
                   type="email"
                   required
                   placeholder="ejemplo@correo.com"
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-colors"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-1 focus:border-transparent transition-colors"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -91,7 +91,7 @@ export function Login() {
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-colors"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-1 focus:border-transparent transition-colors"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -101,7 +101,7 @@ export function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors disabled:opacity-60"
+              className="w-full bg-brand-1 text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-1-dark focus:outline-none focus:ring-2 focus:ring-brand-1 focus:ring-offset-2 transition-colors disabled:opacity-60"
             >
               {loading ? "Ingresando..." : "Iniciar Sesión"}
             </button>

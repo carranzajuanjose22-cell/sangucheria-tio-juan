@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Receipt, ShoppingCart, Clock, Lock, Unlock, X, CheckCircle2, Eye } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 import { api } from "./api.js";
@@ -95,11 +95,11 @@ export function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 rounded-xl shadow-lg text-white">
+      <div className="bg-gradient-to-r from-brand-1 to-brand-2 p-6 rounded-xl shadow-lg text-white">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold capitalize">{currentDate}</h1>
-            <p className="mt-1 text-blue-100">Panel de Administración</p>
+            <p className="mt-1 text-brand-4">Panel de Administración</p>
           </div>
           <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm px-6 py-3 rounded-lg">
             <Clock className="w-5 h-5" />
@@ -125,7 +125,7 @@ export function Dashboard() {
               </div>
             </div>
             {registerState?.isOpen ? (
-              <button onClick={() => setModalState("closeRegister")} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600">
+              <button onClick={() => setModalState("closeRegister")} className="flex items-center gap-2 px-4 py-2 bg-brand-1 text-white rounded-lg font-medium hover:bg-brand-1-dark">
                 <Lock size={16} /> Cerrar Caja
               </button>
             ) : (
@@ -145,7 +145,7 @@ export function Dashboard() {
             ].map(({ label, value, red, green }) => (
               <div key={label} className="bg-white rounded-xl p-5 border border-gray-200">
                 <p className="text-sm text-gray-600 mb-2">{label}</p>
-                <p className={`text-2xl font-bold ${red ? "text-red-600" : green ? "text-green-600" : "text-gray-900"}`}>{value}</p>
+                <p className={`text-2xl font-bold ${red ? "text-brand-1" : green ? "text-green-600" : "text-gray-900"}`}>{value}</p>
               </div>
             ))}
           </div>
@@ -163,7 +163,7 @@ export function Dashboard() {
               )}
             </div>
             <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
-              <div className={`h-full rounded-full transition-all duration-1000 ${isCovered ? "bg-green-500" : "bg-blue-500"}`} style={{ width: `${coveragePercent}%` }} />
+              <div className={`h-full rounded-full transition-all duration-1000 ${isCovered ? "bg-green-500" : "bg-brand-40"}`} style={{ width: `${coveragePercent}%` }} />
             </div>
             <p className="text-right text-xs text-gray-500 mt-2 font-medium">{coveragePercent.toFixed(1)}%</p>
           </div>
@@ -182,8 +182,8 @@ export function Dashboard() {
                   return (
                     <div key={sale.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <Receipt className="w-5 h-5 text-blue-600" />
+                        <div className="w-10 h-10 bg-brand-4 rounded-lg flex items-center justify-center">
+                          <Receipt className="w-5 h-5 text-brand-1" />
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">Ticket #{sale.id}</p>
@@ -195,7 +195,7 @@ export function Dashboard() {
                           <p className="font-bold text-gray-900">${sale.total}</p>
                           <p className="text-xs text-gray-500">{sale.items.length} producto{sale.items.length !== 1 ? "s" : ""}</p>
                         </div>
-                        <button onClick={() => setSelectedTicket(sale)} className="p-2 text-gray-400 hover:text-blue-600 rounded-lg">
+                        <button onClick={() => setSelectedTicket(sale)} className="p-2 text-gray-400 hover:text-brand-1 rounded-lg">
                           <Eye size={20} />
                         </button>
                       </div>
@@ -246,24 +246,24 @@ export function Dashboard() {
             </div>
             <div className="p-6">
               {pendingOrders.length > 0 && (
-                <div className="mb-5 bg-red-50 border border-red-300 rounded-xl p-4">
-                  <p className="font-bold text-red-700 text-sm">No se puede cerrar la caja</p>
-                  <p className="text-red-600 text-sm mt-1">
+                <div className="mb-5 bg-brand-1/10 border border-brand-1/30 rounded-xl p-4">
+                  <p className="font-bold text-brand-1-dark text-sm">No se puede cerrar la caja</p>
+                  <p className="text-brand-1 text-sm mt-1">
                     Hay <strong>{pendingOrders.length} pedido{pendingOrders.length > 1 ? "s" : ""} en preparación</strong> sin resolver.
                   </p>
                 </div>
               )}
               <div className="flex flex-col items-center justify-center mb-6">
-                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-3"><Lock size={32} /></div>
+                <div className="w-16 h-16 bg-brand-1/15 text-brand-1 rounded-full flex items-center justify-center mb-3"><Lock size={32} /></div>
                 <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
-                <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                <div className="w-full bg-brand-4 border border-brand-3/60 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">${registerState?.initialCash || 0}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Ventas:</span><span className="font-medium">{sales.length}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">${totalSalesToday}</span></div>
-                  <div className="flex justify-between text-sm border-b border-blue-200 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-red-600">-${totalExpensesToday}</span></div>
-                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-blue-700">${(registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday}</span></div>
+                  <div className="flex justify-between text-sm border-b border-brand-3/60 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-brand-1">-${totalExpensesToday}</span></div>
+                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-brand-1">${(registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday}</span></div>
                 </div>
-                <p className="text-red-600 font-medium text-sm mt-4 text-center">⚠️ Esta acción no se puede deshacer</p>
+                <p className="text-brand-1 font-medium text-sm mt-4 text-center">⚠️ Esta acción no se puede deshacer</p>
               </div>
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3">
@@ -276,7 +276,7 @@ export function Dashboard() {
                 className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
                   pendingOrders.length > 0
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-brand-1 text-white hover:bg-brand-1-dark"
                 }`}
               >
                 Cerrar Caja
@@ -295,7 +295,7 @@ export function Dashboard() {
               <p className="text-gray-600 text-center">Puedes consultar los detalles en la sección de "Cajas".</p>
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50">
-              <button onClick={() => setModalState("none")} className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700">Entendido</button>
+              <button onClick={() => setModalState("none")} className="w-full bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Entendido</button>
             </div>
           </div>
         </div>
@@ -324,7 +324,7 @@ export function Dashboard() {
               </div>
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-lg">
-                  <span>Total</span><span className="text-blue-600">${selectedTicket.total}</span>
+                  <span>Total</span><span className="text-brand-1">${selectedTicket.total}</span>
                 </div>
                 <div className="mt-2 text-sm text-gray-500">
                   <span className="block mb-1">Medio(s) de Pago:</span>

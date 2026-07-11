@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 import { api } from "./api.js";
@@ -182,7 +182,7 @@ export function Statistics() {
         </div>
         <div className="flex gap-2">
           {rangeButtons.map(({ id, label }) => (
-            <button key={id} onClick={() => setDateRange(id)} className={`px-4 py-2 rounded-lg font-medium transition-colors ${dateRange === id ? "bg-blue-600 text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>{label}</button>
+            <button key={id} onClick={() => setDateRange(id)} className={`px-4 py-2 rounded-lg font-medium transition-colors ${dateRange === id ? "bg-brand-1 text-white" : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"}`}>{label}</button>
           ))}
         </div>
       </div>
@@ -191,8 +191,8 @@ export function Statistics() {
         {[
           { label: "Ingresos Totales", value: `$${totalRevenue.toFixed(2)}`, icon: DollarSign, bg: "bg-green-100", color: "text-green-600" },
           { label: "Efectivo", value: `$${totalEfectivo.toFixed(2)}`, icon: DollarSign, bg: "bg-emerald-100", color: "text-emerald-600" },
-          { label: "Virtual", value: `$${totalVirtual.toFixed(2)}`, icon: CreditCard, bg: "bg-blue-100", color: "text-blue-600" },
-          { label: "Productos Vendidos", value: productsSold, icon: Package, bg: "bg-orange-100", color: "text-orange-600" },
+          { label: "Virtual", value: `$${totalVirtual.toFixed(2)}`, icon: CreditCard, bg: "bg-brand-4", color: "text-brand-1" },
+          { label: "Productos Vendidos", value: productsSold, icon: Package, bg: "bg-brand-4", color: "text-brand-1" },
           { label: "Mayonesa (Tachos)", value: tachosMayonesa, icon: Package, bg: "bg-yellow-200", color: "text-yellow-700", special: true },
         ].map(({ label, value, icon: Icon, bg, color, special }) => (
           <div key={label} className={`${special ? "bg-yellow-50 border-yellow-200" : "bg-white border-gray-200"} p-6 rounded-xl border shadow-sm`}>
@@ -210,7 +210,7 @@ export function Statistics() {
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center justify-between gap-4">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wallet className="w-5 h-5 text-gray-500" /> Balance General</h3>
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600">
+            <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-4 py-1.5 bg-brand-1 text-white rounded-lg text-sm font-medium hover:bg-brand-1-dark">
               <ShoppingCart size={16} /> Ingresar Compra
             </button>
           </div>
@@ -220,7 +220,7 @@ export function Statistics() {
             <div className="flex-1 w-full space-y-4">
               {[
                 { icon: TrendingUp, label: "Ingresos (Ventas)", value: `$${totalRevenue.toFixed(2)}`, bg: "bg-green-50/50 border-green-100", iconBg: "bg-green-100 text-green-600", textColor: "text-green-700" },
-                { icon: TrendingDown, label: "Gastos Operativos (Caja)", value: `-$${totalVariableExpenses.toFixed(2)}`, bg: "bg-red-50/50 border-red-100", iconBg: "bg-red-100 text-red-600", textColor: "text-red-700" },
+                { icon: TrendingDown, label: "Gastos Operativos (Caja)", value: `-$${totalVariableExpenses.toFixed(2)}`, bg: "bg-brand-1/10 border-brand-1/20", iconBg: "bg-brand-1/15 text-brand-1", textColor: "text-brand-1-dark" },
                 { icon: ShoppingCart, label: "Compras de Insumos", value: `-$${totalPurchases.toFixed(2)}`, bg: "bg-yellow-50/50 border-yellow-100", iconBg: "bg-yellow-100 text-yellow-600", textColor: "text-yellow-700" },
               ].map(({ icon: Icon, label, value, bg, iconBg, textColor }) => (
                 <div key={label} className={`flex justify-between items-center p-4 ${bg} rounded-xl border`}>
@@ -233,9 +233,9 @@ export function Statistics() {
               ))}
             </div>
             <div className="hidden md:flex items-center justify-center px-4"><ArrowRight className="text-gray-300 w-8 h-8" /></div>
-            <div className={`flex-1 w-full p-8 rounded-2xl border flex flex-col items-center justify-center text-center ${netBalance >= 0 ? "bg-blue-50/50 border-blue-200" : "bg-red-50/50 border-red-200"}`}>
+            <div className={`flex-1 w-full p-8 rounded-2xl border flex flex-col items-center justify-center text-center ${netBalance >= 0 ? "bg-brand-4/50 border-brand-3/60" : "bg-brand-1/10 border-brand-1/25"}`}>
               <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Ganancia Neta Estimada</p>
-              <p className={`text-5xl font-black ${netBalance >= 0 ? "text-blue-700" : "text-red-600"}`}>${netBalance.toFixed(2)}</p>
+              <p className={`text-5xl font-black ${netBalance >= 0 ? "text-brand-1" : "text-brand-1"}`}>${netBalance.toFixed(2)}</p>
               <p className="text-sm text-gray-500 mt-4 max-w-[250px]">Balance de ingresos menos gastos variables y compras del período.</p>
               <div className="mt-4 text-xs text-gray-400 bg-white/50 border border-gray-200 rounded-lg px-3 py-2">
                 <p>Gastos fijos mensuales (servicios):</p>
@@ -259,7 +259,7 @@ export function Statistics() {
                 {allProducts.map((product, index) => (
                   <div key={product.name} className="flex items-center justify-between border-b border-gray-100 last:border-0 pb-3 last:pb-0">
                     <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm">{index + 1}</span>
+                      <span className="w-8 h-8 bg-brand-4 text-brand-1 rounded-full flex items-center justify-center font-bold text-sm">{index + 1}</span>
                       <div>
                         <p className="font-medium text-gray-900">{product.name}</p>
                         <p className="text-sm text-gray-500">{product.quantity} unidades</p>
@@ -295,7 +295,7 @@ export function Statistics() {
                         <p className="font-bold text-gray-900">{formatHours(emp.hours)}</p>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div className="bg-indigo-500 h-3 rounded-full transition-all" style={{ width: `${percentage}%` }} />
+                        <div className="bg-brand-1 h-3 rounded-full transition-all" style={{ width: `${percentage}%` }} />
                       </div>
                     </div>
                   );
@@ -329,7 +329,7 @@ export function Statistics() {
                       <div className="flex items-center gap-2 text-gray-600"><Calendar size={14} /><span className="text-sm">{new Date(purchase.date).toLocaleDateString("es-AR")}</span></div>
                     </td>
                     <td className="px-6 py-3"><span className="font-medium text-gray-900">{purchase.description}</span></td>
-                    <td className="px-6 py-3 text-right"><span className="font-bold text-red-600">-${purchase.amount.toFixed(2)}</span></td>
+                    <td className="px-6 py-3 text-right"><span className="font-bold text-brand-1">-${purchase.amount.toFixed(2)}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -348,19 +348,19 @@ export function Statistics() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Etiqueta / Descripción</label>
-                <input type="text" value={purchaseDesc} onChange={(e) => setPurchaseDesc(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="¿Qué insumos compraste?" autoFocus />
+                <input type="text" value={purchaseDesc} onChange={(e) => setPurchaseDesc(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-3" placeholder="¿Qué insumos compraste?" autoFocus />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Monto del Gasto</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
-                  <input type="text" inputMode="decimal" value={purchaseAmount} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setPurchaseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="0.00" />
+                  <input type="text" inputMode="decimal" value={purchaseAmount} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setPurchaseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-3" placeholder="0.00" />
                 </div>
               </div>
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3">
               <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleRegisterPurchase} className="flex-1 bg-orange-500 text-white py-2.5 rounded-lg font-medium hover:bg-orange-600">Registrar Gasto</button>
+              <button onClick={handleRegisterPurchase} className="flex-1 bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Registrar Gasto</button>
             </div>
           </div>
         </div>

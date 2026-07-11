@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Tag, Plus, Save, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { api } from "./api.js";
 import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
@@ -105,10 +105,10 @@ export function UnitProductsBuilder() {
             setIsOpen((open) => !open);
           }
         }}
-        className={`px-6 py-4 flex items-center justify-between bg-orange-50/50 cursor-pointer hover:bg-orange-100/50 transition-colors ${isOpen ? "border-b border-gray-200" : ""}`}
+        className={`px-6 py-4 flex items-center justify-between bg-brand-4/50 cursor-pointer hover:bg-brand-4/70 transition-colors ${isOpen ? "border-b border-gray-200" : ""}`}
       >
         <div className="flex items-center gap-3">
-          <Tag className="text-orange-500" size={20} />
+          <Tag className="text-brand-3-dark" size={20} />
           <h2 className="text-lg font-medium text-gray-900">Otros Productos (por unidad)</h2>
           <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
         </div>
@@ -117,7 +117,7 @@ export function UnitProductsBuilder() {
             e.stopPropagation();
             openModal(null);
           }}
-          className="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700"
+          className="flex items-center px-3 py-1.5 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark"
         >
           <Plus className="w-4 h-4 mr-1" /> Agregar
         </button>
@@ -131,7 +131,7 @@ export function UnitProductsBuilder() {
             </p>
             <button
               onClick={handleSave}
-              className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors ${hasUnsavedChanges ? "bg-orange-500 hover:bg-orange-600" : "bg-green-600 hover:bg-green-700"}`}
+              className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors ${hasUnsavedChanges ? "bg-brand-1 hover:bg-brand-1-dark" : "bg-green-600 hover:bg-green-700"}`}
             >
               <Save size={16} /> {hasUnsavedChanges ? "Guardar Productos *" : "Guardar Productos"}
             </button>
@@ -156,12 +156,12 @@ export function UnitProductsBuilder() {
                   <tr key={product.id}>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.name}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">${product.price.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm text-purple-800">${product.wholesalePrice.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm text-brand-2-dark">${product.wholesalePrice.toFixed(2)}</td>
                     <td className="px-6 py-4 text-sm font-medium text-right">
-                      <button onClick={() => openModal(product)} className="text-blue-600 hover:text-blue-900 mr-3 inline-block">
+                      <button onClick={() => openModal(product)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(product.id)} className="text-red-600 hover:text-red-900 inline-block">
+                      <button onClick={() => handleDelete(product.id)} className="text-brand-1 hover:text-brand-1-dark inline-block">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
@@ -231,7 +231,7 @@ export function UnitProductsBuilder() {
                 <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
                   Cancelar
                 </button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700">
+                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark">
                   {editingId ? "Guardar Cambios" : "Agregar"}
                 </button>
               </div>

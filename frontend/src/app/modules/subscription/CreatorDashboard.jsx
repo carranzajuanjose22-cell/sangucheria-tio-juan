@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useSubscription } from "./SubscriptionContext.jsx";
 import {
   Settings, Calendar, ShieldCheck, Play, RotateCcw, LogOut,
@@ -17,16 +17,16 @@ function AlertModal({ open, type = "success", title, message, onClose }) {
       btn: "bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500",
     },
     error: {
-      icon: <AlertCircle className="w-10 h-10 text-red-600" />,
-      bg: "bg-red-50",
-      border: "border-red-200",
-      btn: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
+      icon: <AlertCircle className="w-10 h-10 text-brand-1" />,
+      bg: "bg-brand-1/10",
+      border: "border-brand-1/25",
+      btn: "bg-brand-1 hover:bg-brand-1-dark focus:ring-brand-1",
     },
     warning: {
-      icon: <AlertCircle className="w-10 h-10 text-amber-600" />,
-      bg: "bg-amber-50",
-      border: "border-amber-200",
-      btn: "bg-amber-500 hover:bg-amber-600 focus:ring-amber-400",
+      icon: <AlertCircle className="w-10 h-10 text-brand-3-dark" />,
+      bg: "bg-brand-4",
+      border: "border-brand-3/30",
+      btn: "bg-brand-3-dark hover:bg-brand-1 focus:ring-brand-3",
     },
   };
 
@@ -152,7 +152,7 @@ export function CreatorDashboard() {
       <div className="max-w-4xl mx-auto p-6 mt-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-            <Settings className="w-6 h-6 text-blue-600" />
+            <Settings className="w-6 h-6 text-brand-1" />
             <h1 className="text-2xl font-bold text-gray-900">Configuración de Suscripción</h1>
           </div>
 
@@ -175,7 +175,7 @@ export function CreatorDashboard() {
                   <p className="text-sm text-gray-500 mb-1">Fase de Aviso (5 días)</p>
                   <p className="font-medium">
                     {isWarningPhase ? (
-                      <span className="text-amber-600">Activa ⚠️</span>
+                      <span className="text-brand-3-dark">Activa ⚠️</span>
                     ) : (
                       <span className="text-gray-900">Inactiva</span>
                     )}
@@ -185,7 +185,7 @@ export function CreatorDashboard() {
                   <p className="text-sm text-gray-500 mb-1">Restricción de Uso</p>
                   <p className="font-medium">
                     {isExpired ? (
-                      <span className="text-red-600">Bloqueado 🔒</span>
+                      <span className="text-brand-1">Bloqueado 🔒</span>
                     ) : (
                       <span className="text-emerald-600">Normal ✅</span>
                     )}
@@ -211,7 +211,7 @@ export function CreatorDashboard() {
                       min="1"
                       max="31"
                       placeholder="Ej: 10"
-                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-colors"
+                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-1 focus:border-transparent transition-colors"
                       value={selectedDay}
                       onChange={(e) => setSelectedDay(e.target.value)}
                     />
@@ -219,7 +219,7 @@ export function CreatorDashboard() {
                 </div>
                 <button
                   onClick={handleStartSubscription}
-                  className="w-full md:w-auto bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors flex items-center justify-center gap-2"
+                  className="w-full md:w-auto bg-brand-1 text-white font-semibold py-3 px-6 rounded-lg hover:bg-brand-1-dark focus:outline-none focus:ring-2 focus:ring-brand-1 focus:ring-offset-2 transition-colors flex items-center justify-center gap-2"
                 >
                   <Play className="w-5 h-5" />
                   Guardar Día de Corte

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Archive, DollarSign, Calendar, Eye, X, Receipt, Tag, TrendingUp, Filter, TrendingDown } from "lucide-react";
 import { api } from "./api.js";
 
@@ -77,12 +77,12 @@ export function Registers() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-2" />
               </div>
             </div>
             <div className="flex-1 min-w-[200px]">
               <label className="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
-              <select value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+              <select value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-2 bg-white">
                 <option value="">Todos los usuarios</option>
                 {allFilterUsers.map((emp) => <option key={emp} value={emp}>{emp}</option>)}
               </select>
@@ -132,10 +132,10 @@ export function Registers() {
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">{record.totalSalesCount}</td>
                     <td className="px-6 py-4 text-sm text-right">
                       <span className="text-green-600 font-bold">${record.totalIncome}</span>
-                      {record.totalExpenses ? <span className="text-red-500 text-xs block">-${record.totalExpenses} (Gastos)</span> : null}
+                      {record.totalExpenses ? <span className="text-brand-1 text-xs block">-${record.totalExpenses} (Gastos)</span> : null}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <button onClick={() => setSelectedRegister(record)} className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50">
+                      <button onClick={() => setSelectedRegister(record)} className="p-2 text-gray-400 hover:text-brand-1 rounded-lg hover:bg-brand-4">
                         <Eye size={18} />
                       </button>
                     </td>
@@ -220,15 +220,15 @@ export function Registers() {
 
                   {selectedRegister.expenses?.length > 0 && (
                     <div className="mb-8">
-                      <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingDown size={18} className="text-red-500" /> Detalle de Gastos y Compras</h4>
+                      <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingDown size={18} className="text-brand-1" /> Detalle de Gastos y Compras</h4>
                       <div className="space-y-3">
                         {selectedRegister.expenses.map((expense) => (
-                          <div key={expense.id} className="flex justify-between items-center p-4 bg-red-50/30 border border-red-100 rounded-xl">
+                          <div key={expense.id} className="flex justify-between items-center p-4 bg-brand-1/10/30 border border-brand-1/20 rounded-xl">
                             <div>
                               <p className="font-medium text-gray-900">{expense.description}</p>
                               <p className="text-xs text-gray-500">{new Date(expense.date).toLocaleTimeString("es-AR", { hour12: false })}</p>
                             </div>
-                            <span className="font-bold text-red-600">-${expense.amount.toFixed(2)}</span>
+                            <span className="font-bold text-brand-1">-${expense.amount.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -241,7 +241,7 @@ export function Registers() {
                       <div key={sale.id} className="border border-gray-200 rounded-xl p-4">
                         <div className="flex justify-between items-start mb-3 pb-3 border-b border-gray-200">
                           <div>
-                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-bold uppercase mr-2">#{sale.id}</span>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-brand-4 text-brand-1 text-xs font-bold uppercase mr-2">#{sale.id}</span>
                             <span className="text-sm text-gray-500">{new Date(sale.date).toLocaleTimeString("es-AR", { hour12: false })}</span>
                           </div>
                           <div className="text-right">

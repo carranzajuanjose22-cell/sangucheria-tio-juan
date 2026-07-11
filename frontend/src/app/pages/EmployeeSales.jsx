@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Receipt, Clock, CreditCard, Printer, X } from "lucide-react";
 import { api } from "./api.js";
 
@@ -47,12 +47,12 @@ export function EmployeeSales() {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Transferencia</p>
-            <p className="text-xl font-bold text-blue-600">${totalTransferencia.toFixed(2)}</p>
+            <p className="text-xl font-bold text-brand-1">${totalTransferencia.toFixed(2)}</p>
           </div>
           {totalOtros > 0 && (
             <div>
               <p className="text-sm font-medium text-gray-500">Otros</p>
-              <p className="text-xl font-bold text-purple-600">${totalOtros.toFixed(2)}</p>
+              <p className="text-xl font-bold text-brand-2">${totalOtros.toFixed(2)}</p>
             </div>
           )}
           <div className="pl-4 sm:pl-6 border-l border-gray-200">
@@ -73,9 +73,9 @@ export function EmployeeSales() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sales.slice().reverse().map((sale) => (
-                <div key={sale.id} className="border border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer" onClick={() => setSelectedSale(sale)}>
+                <div key={sale.id} className="border border-gray-200 rounded-xl p-4 hover:border-brand-3 hover:shadow-md transition-all cursor-pointer" onClick={() => setSelectedSale(sale)}>
                   <div className="flex justify-between items-start mb-3">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 text-sm font-medium uppercase">#{sale.id}</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-brand-4 text-brand-1 text-sm font-medium uppercase">#{sale.id}</span>
                     <span className="flex items-center text-sm text-gray-500 gap-1.5">
                       <Clock size={14} />
                       {new Date(sale.date).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false })}

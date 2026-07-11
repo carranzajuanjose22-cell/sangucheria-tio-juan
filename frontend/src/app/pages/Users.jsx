@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Search, MoreVertical, Edit2, Trash2, Users as UsersIcon, X } from "lucide-react";
 import { api } from "./api.js";
 
@@ -84,7 +84,7 @@ export function Users() {
         </div>
         <button
           onClick={openCreateModal}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm"
+          className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark shadow-sm"
         >
           Añadir Usuario
         </button>
@@ -100,7 +100,7 @@ export function Users() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-brand-2 focus:border-brand-2 sm:text-sm"
               placeholder="Buscar usuarios..."
             />
           </div>
@@ -129,7 +129,7 @@ export function Users() {
                   <tr key={user.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                        <div className="h-10 w-10 flex-shrink-0 rounded-full bg-brand-4 flex items-center justify-center text-brand-1 font-bold">
                           {user.name?.charAt(0)}
                         </div>
                         <div className="ml-4">
@@ -143,17 +143,17 @@ export function Users() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                        user.status === "Activo" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                        user.status === "Activo" ? "bg-green-100 text-green-800" : "bg-brand-1/15 text-brand-1-dark"
                       }`}>
                         {user.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
-                        <button onClick={() => openEditModal(user)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
+                        <button onClick={() => openEditModal(user)} className="p-1 text-gray-400 hover:text-brand-1 transition-colors">
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDelete(user.id)} className="p-1 text-gray-400 hover:text-red-600 transition-colors">
+                        <button onClick={() => handleDelete(user.id)} className="p-1 text-gray-400 hover:text-brand-1 transition-colors">
                           <Trash2 className="h-4 w-4" />
                         </button>
                         <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors">
@@ -195,7 +195,7 @@ export function Users() {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                   />
                 </div>
                 <div>
@@ -205,7 +205,7 @@ export function Users() {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                   />
                 </div>
                 <div>
@@ -220,7 +220,7 @@ export function Users() {
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -229,7 +229,7 @@ export function Users() {
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                     >
                       <option value="Cajero">Cajero</option>
                       <option value="Admin">Administrador</option>
@@ -240,7 +240,7 @@ export function Users() {
                     <select
                       value={formData.status}
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-3 py-2 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                     >
                       <option value="Activo">Activo</option>
                       <option value="Inactivo">Inactivo</option>
@@ -258,7 +258,7 @@ export function Users() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  className="flex-1 bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark transition-colors"
                 >
                   Guardar Usuario
                 </button>
