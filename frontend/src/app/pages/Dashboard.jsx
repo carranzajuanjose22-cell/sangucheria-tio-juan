@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from "react";
 import { Receipt, ShoppingCart, Clock, Lock, Unlock, X, CheckCircle2, Eye } from "lucide-react";
-import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
 import { api } from "./api.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister } from "../utils/register.js";
@@ -137,11 +137,11 @@ export function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             {[
-              { label: "Efectivo Inicial", value: `$${registerState?.isOpen ? registerState.initialCash.toFixed(2) : "0.00"}` },
+              { label: "Efectivo Inicial", value: registerState?.isOpen ? formatMoney(registerState.initialCash) : formatMoney(0) },
               { label: "Ventas Realizadas", value: sales.length },
-              { label: "Total Vendido", value: `$${totalSalesToday.toFixed(2)}` },
-              { label: "Gastos Registrados", value: `$${totalExpensesToday.toFixed(2)}`, red: true },
-              { label: "Efectivo en Caja", value: `$${registerState?.isOpen ? (registerState.initialCash + totalSalesToday - totalExpensesToday).toFixed(2) : "0.00"}`, green: true },
+              { label: "Total Vendido", value: formatMoney(totalSalesToday) },
+              { label: "Gastos Registrados", value: formatMoneyDebit(totalExpensesToday), red: true },
+              { label: "Efectivo en Caja", value: registerState?.isOpen ? formatMoney(registerState.initialCash + totalSalesToday - totalExpensesToday) : formatMoney(0), green: true },
             ].map(({ label, value, red, green }) => (
               <div key={label} className="bg-white rounded-xl p-5 border border-gray-200">
                 <p className="text-sm text-gray-600 mb-2">{label}</p>
@@ -154,7 +154,7 @@ export function Dashboard() {
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-3 gap-2">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Cobertura de Gastos Fijos <span className="text-sm font-normal text-gray-500">(Mes Actual)</span></h3>
-                <p className="text-sm text-gray-500 mt-1">Balance: <span className="font-medium">${Math.max(monthlyBalance, 0).toFixed(2)}</span> / Meta: <span className="font-medium">${fixedExpensesTotal.toFixed(2)}</span></p>
+                <p className="text-sm text-gray-500 mt-1">Balance: <span className="font-medium">{formatMoney(Math.max(monthlyBalance, 0))}</span> / Meta: <span className="font-medium">{formatMoney(fixedExpensesTotal)}</span></p>
               </div>
               {isCovered && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-medium">
@@ -192,7 +192,7 @@ export function Dashboard() {
                       </div>
                       <div className="flex items-center gap-4 text-right">
                         <div>
-                          <p className="font-bold text-gray-900">${sale.total}</p>
+                          <p className="font-bold text-gray-900">{formatMoney(sale.total)}</p>
                           <p className="text-xs text-gray-500">{sale.items.length} producto{sale.items.length !== 1 ? "s" : ""}</p>
                         </div>
                         <button onClick={() => setSelectedTicket(sale)} className="p-2 text-gray-400 hover:text-brand-1 rounded-lg">
@@ -257,11 +257,11 @@ export function Dashboard() {
                 <div className="w-16 h-16 bg-brand-1/15 text-brand-1 rounded-full flex items-center justify-center mb-3"><Lock size={32} /></div>
                 <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
                 <div className="w-full bg-brand-4 border border-brand-3/60 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">${registerState?.initialCash || 0}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">{formatMoney(registerState?.initialCash || 0)}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Ventas:</span><span className="font-medium">{sales.length}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">${totalSalesToday}</span></div>
-                  <div className="flex justify-between text-sm border-b border-brand-3/60 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-brand-1">-${totalExpensesToday}</span></div>
-                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-brand-1">${(registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">{formatMoney(totalSalesToday)}</span></div>
+                  <div className="flex justify-between text-sm border-b border-brand-3/60 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-brand-1">{formatMoneyDebit(totalExpensesToday)}</span></div>
+                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-brand-1">{formatMoney((registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday)}</span></div>
                 </div>
                 <p className="text-brand-1 font-medium text-sm mt-4 text-center">⚠️ Esta acción no se puede deshacer</p>
               </div>
@@ -318,22 +318,22 @@ export function Dashboard() {
                 {selectedTicket.items.map((item) => (
                   <div key={item.id} className="flex justify-between items-center text-sm">
                     <span className="text-gray-700">{item.quantity}x {item.name}</span>
-                    <span className="font-medium">${item.price * item.quantity}</span>
+                    <span className="font-medium">{formatMoney(item.price * item.quantity)}</span>
                   </div>
                 ))}
               </div>
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-lg">
-                  <span>Total</span><span className="text-brand-1">${selectedTicket.total}</span>
+                  <span>Total</span><span className="text-brand-1">{formatMoney(selectedTicket.total)}</span>
                 </div>
                 <div className="mt-2 text-sm text-gray-500">
                   <span className="block mb-1">Medio(s) de Pago:</span>
                   {selectedTicket.payments?.length > 0 ? (
                     selectedTicket.payments.map((p, idx) => (
-                      <div key={idx} className="flex justify-between"><span className="uppercase">{p.method}</span><span className="font-medium">${p.amount.toFixed(2)}</span></div>
+                      <div key={idx} className="flex justify-between"><span className="uppercase">{p.method}</span><span className="font-medium">{formatMoney(p.amount)}</span></div>
                     ))
                   ) : (
-                    <div className="flex justify-between"><span className="uppercase">{selectedTicket.paymentMethod}</span><span className="font-medium">${selectedTicket.total}</span></div>
+                    <div className="flex justify-between"><span className="uppercase">{selectedTicket.paymentMethod}</span><span className="font-medium">{formatMoney(selectedTicket.total)}</span></div>
                   )}
                 </div>
               </div>

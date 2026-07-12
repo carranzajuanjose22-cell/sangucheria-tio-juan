@@ -2,7 +2,7 @@
 import { useLocation } from "react-router";
 import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow, Gift } from "lucide-react";
 import { api } from "./api.js";
-import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
 import {
   calculateSaleTotals,
   buildInitialPayments,
@@ -476,7 +476,7 @@ export function EmployeePos() {
   const handleRegisterSale = async () => {
     if (!payingOrder || isRegisterClosed) return;
     if (totalPaid < amountDue) {
-      alert(`Falta pagar $${remaining.toFixed(2)}`);
+      alert(`Falta pagar ${formatMoney(remaining)}`);
       return;
     }
     
@@ -484,7 +484,7 @@ export function EmployeePos() {
     if (payingOrder.advanceAmount > 0) {
       finalPayments.unshift({ method: "Seña", amount: payingOrder.advanceAmount });
     }
-    const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
+    const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} (${formatMoney(p.amount)})`).join(" + ");
     const newSale = {
       id: payingOrder.id,
       date: new Date().toISOString(),
@@ -580,7 +580,7 @@ export function EmployeePos() {
           <p className={`text-sm ${isRegisterClosed ? "text-brand-1 font-medium" : "text-gray-500"}`}>
             Caja {isRegisterClosed ? "Cerrada" : "Abierta"}: #01 • {userName}
           </p>
-          {registerState?.isOpen && <p className="text-xs text-gray-400 mt-1">Monto inicial: ${registerState.initialCash}</p>}
+          {registerState?.isOpen && <p className="text-xs text-gray-400 mt-1">Monto inicial: {formatMoney(registerState.initialCash)}</p>}
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -666,7 +666,7 @@ export function EmployeePos() {
                                   className="w-full h-full flex flex-col items-center justify-center py-2.5 px-1 rounded-lg border border-brand-surface-border bg-brand-surface-alt/50 hover:bg-brand-1/25 hover:border-brand-3/70 hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
                                 >
                                   <span className="text-brand-3 font-black text-lg group-hover:scale-105 transition-transform">
-                                    ${product.price}
+                                    {formatMoney(product.price)}
                                   </span>
                                   <span className="text-[10px] text-brand-4/70 font-semibold uppercase mt-1 tracking-wider group-hover:text-brand-4">
                                     Agregar
@@ -684,7 +684,7 @@ export function EmployeePos() {
                                   className="w-full h-full flex flex-col items-center justify-center py-2.5 px-1 rounded-lg border border-brand-1/40 bg-brand-1/10 hover:bg-brand-1/20 hover:border-brand-2/70 hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
                                 >
                                   <span className="text-brand-2 font-black text-lg group-hover:scale-105 transition-transform">
-                                    ${(migaMatrix.find(m => m.variety === row.variety)?.varietyData?.unitPrice || 0).toFixed(2)}
+                                    {formatMoney(migaMatrix.find(m => m.variety === row.variety)?.varietyData?.unitPrice || 0)}
                                   </span>
                                   <span className="text-[10px] text-brand-3 font-semibold uppercase mt-1 tracking-wider group-hover:text-brand-4">
                                     1 Unidad
@@ -716,7 +716,7 @@ export function EmployeePos() {
                     >
                       <span className="font-bold text-gray-900 group-hover:text-brand-1-dark">{promo.name}</span>
                       <span className="text-xs text-gray-600 mt-1 line-clamp-2">{getPromotionSummaryLabel(promo)}</span>
-                      <span className="mt-3 text-brand-1 font-black text-lg">${promo.price.toFixed(2)}</span>
+                      <span className="mt-3 text-brand-1 font-black text-lg">{formatMoney(promo.price)}</span>
                     </button>
                   ))}
                 </div>
@@ -735,9 +735,9 @@ export function EmployeePos() {
                       className="flex flex-col text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-brand-3 hover:shadow-md transition-all group disabled:opacity-50"
                     >
                       <span className="font-medium text-gray-900 group-hover:text-brand-1 line-clamp-2">{product.name}</span>
-                      <span className="mt-2 text-brand-3-dark font-bold">${product.price.toFixed(2)}</span>
+                      <span className="mt-2 text-brand-3-dark font-bold">{formatMoney(product.price)}</span>
                       {product.wholesalePrice > 0 && (
-                        <span className="text-xs text-brand-2-dark font-medium mt-1">Mayor: ${product.wholesalePrice.toFixed(2)}</span>
+                        <span className="text-xs text-brand-2-dark font-medium mt-1">Mayor: {formatMoney(product.wholesalePrice)}</span>
                       )}
                     </button>
                   ))}
@@ -788,7 +788,7 @@ export function EmployeePos() {
                       <button onClick={() => setCart((c) => c.filter((i) => i.id !== item.id))} className="text-gray-400 hover:text-brand-1 p-1"><Trash2 className="w-4 h-4" /></button>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600 font-medium">${item.price}</span>
+                      <span className="text-gray-600 font-medium">{formatMoney(item.price)}</span>
                       <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
                         <button onClick={() => updateQuantity(item.id, -1)} className="px-2 py-1 hover:bg-gray-100 text-gray-600"><Minus className="w-4 h-4" /></button>
                         <input type="number" min="1" value={item.quantity} onChange={(e) => { const qty = parseInt(e.target.value, 10); if (e.target.value !== "" && (Number.isNaN(qty) || qty < 0)) return; setQuantity(item.id, qty || 1); }} className="w-12 text-center font-medium text-sm border-0 focus:ring-0 focus:outline-none" />
@@ -834,7 +834,7 @@ export function EmployeePos() {
             </div>
             <div className="flex justify-between items-center mb-4">
               <span className="text-gray-900 font-medium text-lg">Total del Pedido</span>
-              <span className="text-3xl font-bold text-brand-1">${cartSubtotal.toFixed(2)}</span>
+              <span className="text-3xl font-bold text-brand-1">{formatMoney(cartSubtotal)}</span>
             </div>
             
             <div className="flex flex-col gap-2">
@@ -898,12 +898,12 @@ export function EmployeePos() {
                     )}
                     {order.advanceAmount > 0 && (
                       <p className="inline-block mt-1 px-2 py-0.5 bg-brand-4 text-brand-1 text-xs font-bold rounded border border-brand-3/60">
-                        Seña: ${order.advanceAmount}
+                        Seña: {formatMoney(order.advanceAmount)}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 mt-1">{new Date(order.date).toLocaleTimeString("es-AR", {hour12: false})}</p>
                   </div>
-                  <span className="font-bold text-brand-1">${order.total.toFixed(2)}</span>
+                  <span className="font-bold text-brand-1">{formatMoney(order.total)}</span>
                 </div>
                 <ul className="flex-1 space-y-1 mb-4 overflow-y-auto pr-1">
                   {order.items.map(item => (
@@ -982,11 +982,11 @@ export function EmployeePos() {
                 </div>
                 <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
                 <div className="w-full bg-brand-4 border border-brand-3/60 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">${registerState?.initialCash || 0}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">{formatMoney(registerState?.initialCash || 0)}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Ventas:</span><span className="font-medium">{sales.length}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">${totalSalesToday}</span></div>
-                  <div className="flex justify-between text-sm border-b border-brand-3/60 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-brand-1">-${totalExpensesToday}</span></div>
-                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-brand-1">${(registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday}</span></div>
+                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">{formatMoney(totalSalesToday)}</span></div>
+                  <div className="flex justify-between text-sm border-b border-brand-3/60 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-brand-1">{formatMoneyDebit(totalExpensesToday)}</span></div>
+                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-brand-1">{formatMoney((registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday)}</span></div>
                 </div>
                 {pendingOrders.length === 0 && (
                   <p className="text-brand-1 font-medium text-sm mt-4">⚠️ Esta acción no se puede deshacer</p>
@@ -1035,22 +1035,22 @@ export function EmployeePos() {
                 <div className="space-y-4">
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
                     <div className="flex justify-between"><span className="text-gray-500 flex items-center gap-2"><Receipt size={16} /> Ticket</span><span className="font-medium uppercase text-brand-1">#{lastSale.id}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Monto Total</span><span className="font-bold">${lastSale.total}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Monto Total</span><span className="font-bold">{formatMoney(lastSale.total)}</span></div>
                     {(lastSale.discountPercent || 0) > 0 && (
                       <div className="flex justify-between text-sm text-brand-2-dark">
                         <span>Descuento ({lastSale.discountPercent}%)</span>
-                        <span className="font-medium">-${(lastSale.discountAmount || 0).toFixed(2)}</span>
+                        <span className="font-medium">{formatMoneyDebit(lastSale.discountAmount || 0)}</span>
                       </div>
                     )}
                     <div className="border-t pt-3">
                       <span className="text-gray-500 text-sm block mb-2">Forma(s) de Pago</span>
-                      {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between text-sm"><span>{p.method}</span><span className="font-medium">${p.amount.toFixed(2)}</span></div>) : <div className="flex justify-between"><span>{lastSale.paymentMethod}</span></div>}
+                      {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between text-sm"><span>{p.method}</span><span className="font-medium">{formatMoney(p.amount)}</span></div>) : <div className="flex justify-between"><span>{lastSale.paymentMethod}</span></div>}
                     </div>
                   </div>
                   <div>
                     <h5 className="font-medium text-gray-900 mb-2">Productos Incluidos</h5>
                     <div className="border border-gray-200 rounded-lg divide-y max-h-32 overflow-y-auto">
-                      {lastSale.items.map((item) => <div key={item.id} className="p-3 flex justify-between text-sm"><span>{item.quantity}x {item.name}</span><span className="font-medium">${item.price * item.quantity}</span></div>)}
+                      {lastSale.items.map((item) => <div key={item.id} className="p-3 flex justify-between text-sm"><span>{item.quantity}x {item.name}</span><span className="font-medium">{formatMoney(item.price * item.quantity)}</span></div>)}
                     </div>
                   </div>
                 </div>
@@ -1064,13 +1064,13 @@ export function EmployeePos() {
                   <div className="flex justify-between"><span className="text-gray-500">Ticket #:</span><span className="uppercase">{lastSale.id}</span></div>
                 </div>
                 <div className="space-y-3 mb-4">
-                  {lastSale.items.map((item) => <div key={item.id} className="flex justify-between text-gray-700"><div>{item.quantity}x {item.name}</div><span>${item.price * item.quantity}</span></div>)}
+                  {lastSale.items.map((item) => <div key={item.id} className="flex justify-between text-gray-700"><div>{item.quantity}x {item.name}</div><span>{formatMoney(item.price * item.quantity)}</span></div>)}
                 </div>
                 <div className="border-t pt-3">
-                  <div className="flex justify-between font-bold text-lg"><span>TOTAL</span><span>${lastSale.total}</span></div>
+                  <div className="flex justify-between font-bold text-lg"><span>TOTAL</span><span>{formatMoney(lastSale.total)}</span></div>
                   <div className="mt-3 text-xs border-t pt-2">
                     <span className="text-gray-500 block mb-1">Medio(s) de Pago:</span>
-                    {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between"><span className="uppercase">{p.method}</span><span>${p.amount.toFixed(2)}</span></div>) : <span className="uppercase">{lastSale.paymentMethod}</span>}
+                    {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between"><span className="uppercase">{p.method}</span><span>{formatMoney(p.amount)}</span></div>) : <span className="uppercase">{lastSale.paymentMethod}</span>}
                   </div>
                 </div>
               </div>
@@ -1105,7 +1105,7 @@ export function EmployeePos() {
                   {payingOrder.advanceAmount > 0 && (
                     <div className="flex items-center gap-2">
                       <DollarSign className="text-green-600 w-5 h-5 flex-shrink-0" />
-                      <p className="text-sm font-bold text-green-800">Seña / Adelanto: <span className="font-medium text-green-700">${payingOrder.advanceAmount.toFixed(2)}</span></p>
+                      <p className="text-sm font-bold text-green-800">Seña / Adelanto: <span className="font-medium text-green-700">{formatMoney(payingOrder.advanceAmount)}</span></p>
                     </div>
                   )}
                 </div>
@@ -1113,35 +1113,35 @@ export function EmployeePos() {
               <div className="mb-6 bg-brand-4 p-4 rounded-xl border border-brand-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-600 font-medium">Subtotal del Pedido</span>
-                  <span className="text-lg font-bold text-gray-900">${orderTotal.toFixed(2)}</span>
+                  <span className="text-lg font-bold text-gray-900">{formatMoney(orderTotal)}</span>
                 </div>
                 {parsedDiscountPercent > 0 && (
                   <div className="flex justify-between items-center text-brand-2-dark mb-2">
                     <span>Descuento ({parsedDiscountPercent}%)</span>
-                    <span className="font-bold">-${discountAmount.toFixed(2)}</span>
+                    <span className="font-bold">{formatMoneyDebit(discountAmount)}</span>
                   </div>
                 )}
                 {parsedDiscountPercent > 0 && (
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-gray-600 font-medium">Subtotal con descuento</span>
-                    <span className="font-bold text-gray-900">${subtotal.toFixed(2)}</span>
+                    <span className="font-bold text-gray-900">{formatMoney(subtotal)}</span>
                   </div>
                 )}
                 {payingOrder.advanceAmount > 0 && (
                   <div className="flex justify-between items-center text-green-600 mb-2">
                     <span>Adelanto / Seña</span>
-                    <span className="font-bold">-${payingOrder.advanceAmount.toFixed(2)}</span>
+                    <span className="font-bold">{formatMoneyDebit(payingOrder.advanceAmount)}</span>
                   </div>
                 )}
                 {surchargeAmount > 0 && (
                   <div className="flex justify-between items-center text-brand-1 mb-2">
                     <span>Recargo ({surchargePercent}%)</span>
-                    <span className="font-bold">${surchargeAmount.toFixed(2)}</span>
+                    <span className="font-bold">{formatMoney(surchargeAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-3 border-t border-brand-3/60">
                   <span className="text-gray-900 font-bold">Total a Cobrar</span>
-                  <span className="text-2xl font-black text-brand-1">${amountDue.toFixed(2)}</span>
+                  <span className="text-2xl font-black text-brand-1">{formatMoney(amountDue)}</span>
                 </div>
               </div>
               <div className="mb-4">
@@ -1204,9 +1204,9 @@ export function EmployeePos() {
                   })}
                 </div>
                 <div className="mt-4 pt-3 border-t border-gray-200 space-y-1">
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Total ingresado:</span><span className="font-medium text-gray-900">${totalPaid.toFixed(2)}</span></div>
-                  {remaining > 0 && <div className="flex justify-between text-sm"><span className="text-brand-1">Falta cobrar:</span><span className="font-bold text-brand-1">${remaining.toFixed(2)}</span></div>}
-                  {remaining < 0 && <div className="flex justify-between text-sm"><span className="text-green-600">Cambio a devolver:</span><span className="font-bold text-green-600">${Math.abs(remaining).toFixed(2)}</span></div>}
+                  <div className="flex justify-between text-sm"><span className="text-gray-600">Total ingresado:</span><span className="font-medium text-gray-900">{formatMoney(totalPaid)}</span></div>
+                  {remaining > 0 && <div className="flex justify-between text-sm"><span className="text-brand-1">Falta cobrar:</span><span className="font-bold text-brand-1">{formatMoney(remaining)}</span></div>}
+                  {remaining < 0 && <div className="flex justify-between text-sm"><span className="text-green-600">Cambio a devolver:</span><span className="font-bold text-green-600">{formatMoney(Math.abs(remaining))}</span></div>}
                 </div>
               </div>
             </div>
@@ -1243,7 +1243,7 @@ export function EmployeePos() {
                       }`}
                     >
                       Minorista
-                      <span className="block text-xs font-semibold mt-1">${(pendingMigaProduct.retailPrice || 0).toFixed(2)}</span>
+                      <span className="block text-xs font-semibold mt-1">{formatMoney(pendingMigaProduct.retailPrice || 0)}</span>
                     </button>
                     <button
                       type="button"
@@ -1255,7 +1255,7 @@ export function EmployeePos() {
                       }`}
                     >
                       Mayorista
-                      <span className="block text-xs font-semibold mt-1">${(pendingMigaProduct.wholesalePrice || 0).toFixed(2)}</span>
+                      <span className="block text-xs font-semibold mt-1">{formatMoney(pendingMigaProduct.wholesalePrice || 0)}</span>
                     </button>
                   </div>
                 </div>
@@ -1281,7 +1281,7 @@ export function EmployeePos() {
                 </div>
                 {eggCount > 0 && inputs.some((i) => i.name.toLowerCase().includes("huevo")) && (
                   <p className="text-xs text-brand-1 mt-2 font-medium text-center">
-                    + ${(inputs.find((i) => i.name.toLowerCase().includes("huevo"))?.price * eggCount).toFixed(2)} al total de esta variedad
+                    + {formatMoney((inputs.find((i) => i.name.toLowerCase().includes("huevo"))?.price || 0) * eggCount)} al total de esta variedad
                   </p>
                 )}
                 {eggCount > 0 && !inputs.some((i) => i.name.toLowerCase().includes("huevo")) && (
@@ -1461,7 +1461,7 @@ export function EmployeePos() {
                     }`}
                   >
                     Minorista
-                    <span className="block text-xs font-semibold mt-1">${getUnitSalePrice(unitSaleModal, "retail").toFixed(2)}</span>
+                    <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitSalePrice(unitSaleModal, "retail"))}</span>
                   </button>
                   <button
                     type="button"
@@ -1473,7 +1473,7 @@ export function EmployeePos() {
                     }`}
                   >
                     Mayorista
-                    <span className="block text-xs font-semibold mt-1">${getUnitSalePrice(unitSaleModal, "wholesale").toFixed(2)}</span>
+                    <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitSalePrice(unitSaleModal, "wholesale"))}</span>
                   </button>
                 </div>
               </div>
@@ -1481,7 +1481,7 @@ export function EmployeePos() {
                 {/* Opción por Unidad */}
                 <div className="bg-brand-4 border-2 border-brand-3/60 rounded-xl p-4 flex flex-col items-center justify-center">
                   <h4 className="font-bold text-brand-1 text-lg mb-3">Por Unidad</h4>
-                  <p className="text-3xl font-black text-brand-1 mb-1">${getUnitSalePrice(unitSaleModal, priceTier).toFixed(2)}</p>
+                  <p className="text-3xl font-black text-brand-1 mb-1">{formatMoney(getUnitSalePrice(unitSaleModal, priceTier))}</p>
                   {getUnitSalePrice(unitSaleModal, priceTier) <= 0 && (
                     <p className="text-xs text-brand-1 mb-3 text-center">Configurá el precio en Configuración → Guardar Catálogo</p>
                   )}
@@ -1519,8 +1519,8 @@ export function EmployeePos() {
                       >
                         <span className="font-medium">{pres.name}</span>
                         <div className="text-right">
-                          <span className="font-bold text-gray-800 block">${pres.price.toFixed(2)}</span>
-                          <span className="text-xs text-brand-2-dark font-semibold">Mayor: ${(pres.wholesalePrice || 0).toFixed(2)}</span>
+                          <span className="font-bold text-gray-800 block">{formatMoney(pres.price)}</span>
+                          <span className="text-xs text-brand-2-dark font-semibold">Mayor: {formatMoney(pres.wholesalePrice || 0)}</span>
                         </div>
                       </button>
                     ))}
@@ -1553,7 +1553,7 @@ export function EmployeePos() {
                   }`}
                 >
                   Minorista
-                  <span className="block text-xs font-semibold mt-1">${getUnitProductPrice(otherProductModal, "retail").toFixed(2)}</span>
+                  <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitProductPrice(otherProductModal, "retail"))}</span>
                 </button>
                 <button
                   type="button"
@@ -1568,7 +1568,7 @@ export function EmployeePos() {
                   }`}
                 >
                   Mayorista
-                  <span className="block text-xs font-semibold mt-1">${getUnitProductPrice(otherProductModal, "wholesale").toFixed(2)}</span>
+                  <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitProductPrice(otherProductModal, "wholesale"))}</span>
                 </button>
               </div>
 

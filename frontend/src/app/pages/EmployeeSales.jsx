@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from "react";
 import { Receipt, Clock, CreditCard, Printer, X } from "lucide-react";
+import { formatMoney } from "../utils/numbers.js";
 import { api } from "./api.js";
 
 export function EmployeeSales() {
@@ -43,21 +44,21 @@ export function EmployeeSales() {
         <div className="flex flex-wrap gap-4 sm:gap-6 text-right mt-4 sm:mt-0">
           <div>
             <p className="text-sm font-medium text-gray-500">Efectivo</p>
-            <p className="text-xl font-bold text-green-600">${totalEfectivo.toFixed(2)}</p>
+            <p className="text-xl font-bold text-green-600">{formatMoney(totalEfectivo)}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Transferencia</p>
-            <p className="text-xl font-bold text-brand-1">${totalTransferencia.toFixed(2)}</p>
+            <p className="text-xl font-bold text-brand-1">{formatMoney(totalTransferencia)}</p>
           </div>
           {totalOtros > 0 && (
             <div>
               <p className="text-sm font-medium text-gray-500">Otros</p>
-              <p className="text-xl font-bold text-brand-2">${totalOtros.toFixed(2)}</p>
+              <p className="text-xl font-bold text-brand-2">{formatMoney(totalOtros)}</p>
             </div>
           )}
           <div className="pl-4 sm:pl-6 border-l border-gray-200">
             <p className="text-sm font-medium text-gray-900">Total General</p>
-            <p className="text-3xl font-bold text-gray-900">${totalToday.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-gray-900">{formatMoney(totalToday)}</p>
           </div>
         </div>
       </div>
@@ -89,7 +90,7 @@ export function EmployeeSales() {
                       <CreditCard size={16} />
                       {sale.payments?.length > 1 ? `${sale.payments.length} métodos` : sale.payments?.[0]?.method || sale.paymentMethod}
                     </div>
-                    <span className="text-lg font-bold text-gray-900">${sale.total}</span>
+                    <span className="text-lg font-bold text-gray-900">{formatMoney(sale.total)}</span>
                   </div>
                 </div>
               ))}
@@ -120,17 +121,17 @@ export function EmployeeSales() {
                 {selectedSale.items.map((item) => (
                   <div key={item.id} className="flex justify-between text-gray-700">
                     <div>{item.quantity}x {item.name}</div>
-                    <span>${item.price * item.quantity}</span>
+                    <span>{formatMoney(item.price * item.quantity)}</span>
                   </div>
                 ))}
               </div>
               <div className="border-t border-gray-900 pt-3">
-                <div className="flex justify-between font-bold text-lg"><span>TOTAL</span><span>${selectedSale.total}</span></div>
+                <div className="flex justify-between font-bold text-lg"><span>TOTAL</span><span>{formatMoney(selectedSale.total)}</span></div>
                 <div className="mt-3 text-xs border-t border-gray-300 pt-2">
                   <span className="text-gray-500 block mb-1">Medio(s) de Pago:</span>
                   {selectedSale.payments?.length > 0 ? (
                     selectedSale.payments.map((payment, idx) => (
-                      <div key={idx} className="flex justify-between text-gray-700"><span className="uppercase">{payment.method}</span><span>${payment.amount.toFixed(2)}</span></div>
+                      <div key={idx} className="flex justify-between text-gray-700"><span className="uppercase">{payment.method}</span><span>{formatMoney(payment.amount)}</span></div>
                     ))
                   ) : (
                     <div className="flex justify-between text-gray-500"><span className="uppercase">{selectedSale.paymentMethod}</span></div>

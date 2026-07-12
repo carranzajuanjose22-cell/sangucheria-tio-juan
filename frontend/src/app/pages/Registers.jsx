@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from "react";
 import { Archive, DollarSign, Calendar, Eye, X, Receipt, Tag, TrendingUp, Filter, TrendingDown } from "lucide-react";
 import { api } from "./api.js";
+import { formatMoney, formatMoneyDebit } from "../utils/numbers.js";
 
 export function Registers() {
   const [registers, setRegisters] = useState([]);
@@ -131,8 +132,8 @@ export function Registers() {
                     <td className="px-6 py-4 text-sm text-gray-600">{record.employee}</td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">{record.totalSalesCount}</td>
                     <td className="px-6 py-4 text-sm text-right">
-                      <span className="text-green-600 font-bold">${record.totalIncome}</span>
-                      {record.totalExpenses ? <span className="text-brand-1 text-xs block">-${record.totalExpenses} (Gastos)</span> : null}
+                      <span className="text-green-600 font-bold">{formatMoney(record.totalIncome)}</span>
+                      {record.totalExpenses ? <span className="text-brand-1 text-xs block">{formatMoneyDebit(record.totalExpenses)} (Gastos)</span> : null}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button onClick={() => setSelectedRegister(record)} className="p-2 text-gray-400 hover:text-brand-1 rounded-lg hover:bg-brand-4">
@@ -170,11 +171,11 @@ export function Registers() {
             <div className="p-6 overflow-y-auto flex-1 space-y-8">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {[
-                  { label: "Monto Inicial", value: `$${selectedRegister.initialCash || 0}`, icon: DollarSign, color: "purple" },
+                  { label: "Monto Inicial", value: formatMoney(selectedRegister.initialCash || 0), icon: DollarSign, color: "purple" },
                   { label: "Total Tickets", value: selectedRegister.totalSalesCount, icon: Receipt, color: "blue" },
-                  { label: "Ingresos", value: `$${selectedRegister.totalIncome}`, icon: TrendingUp, color: "green" },
-                  { label: "Gastos", value: `$${selectedRegister.totalExpenses || 0}`, icon: TrendingDown, color: "red" },
-                  { label: "Total en Caja", value: `$${(selectedRegister.initialCash || 0) + selectedRegister.totalIncome - (selectedRegister.totalExpenses || 0)}`, icon: DollarSign, color: "yellow" },
+                  { label: "Ingresos", value: formatMoney(selectedRegister.totalIncome), icon: TrendingUp, color: "green" },
+                  { label: "Gastos", value: formatMoneyDebit(selectedRegister.totalExpenses || 0), icon: TrendingDown, color: "red" },
+                  { label: "Total en Caja", value: formatMoney((selectedRegister.initialCash || 0) + selectedRegister.totalIncome - (selectedRegister.totalExpenses || 0)), icon: DollarSign, color: "yellow" },
                 ].map(({ label, value, icon: Icon, color }) => (
                   <div key={label} className={`bg-${color}-50/50 p-4 rounded-xl border border-${color}-100`}>
                     <div className="flex items-center gap-3">
@@ -205,14 +206,14 @@ export function Registers() {
                           <tr key={idx} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">{prod.name}</td>
                             <td className="px-4 py-3 text-sm text-gray-600 text-center">{prod.quantity}</td>
-                            <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">${prod.revenue}</td>
+                            <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">{formatMoney(prod.revenue)}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-gray-50 border-t border-gray-200 font-bold">
                         <tr>
                           <td colSpan={2} className="px-4 py-3 text-sm text-gray-900 text-right">TOTAL</td>
-                          <td className="px-4 py-3 text-sm text-green-600 text-right">${selectedRegister.totalIncome}</td>
+                          <td className="px-4 py-3 text-sm text-green-600 text-right">{formatMoney(selectedRegister.totalIncome)}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -228,7 +229,7 @@ export function Registers() {
                               <p className="font-medium text-gray-900">{expense.description}</p>
                               <p className="text-xs text-gray-500">{new Date(expense.date).toLocaleTimeString("es-AR", { hour12: false })}</p>
                             </div>
-                            <span className="font-bold text-brand-1">-${expense.amount.toFixed(2)}</span>
+                            <span className="font-bold text-brand-1">{formatMoneyDebit(expense.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -245,9 +246,9 @@ export function Registers() {
                             <span className="text-sm text-gray-500">{new Date(sale.date).toLocaleTimeString("es-AR", { hour12: false })}</span>
                           </div>
                           <div className="text-right">
-                            <span className="font-bold text-gray-900">${sale.total}</span>
+                            <span className="font-bold text-gray-900">{formatMoney(sale.total)}</span>
                             {sale.payments?.length > 0 ? (
-                              <div className="mt-1 space-y-0.5">{sale.payments.map((p, idx) => <p key={idx} className="text-xs text-gray-500">{p.method} ${p.amount.toFixed(2)}</p>)}</div>
+                              <div className="mt-1 space-y-0.5">{sale.payments.map((p, idx) => <p key={idx} className="text-xs text-gray-500">{p.method} {formatMoney(p.amount)}</p>)}</div>
                             ) : (
                               <p className="text-xs text-gray-500 uppercase">{sale.paymentMethod}</p>
                             )}
@@ -257,7 +258,7 @@ export function Registers() {
                           {sale.items.map((item, idx) => (
                             <li key={idx} className="text-sm flex justify-between text-gray-700">
                               <span>{item.quantity}x {item.name}</span>
-                              <span className="text-gray-500">${item.price * item.quantity}</span>
+                              <span className="text-gray-500">{formatMoney(item.price * item.quantity)}</span>
                             </li>
                           ))}
                         </ul>

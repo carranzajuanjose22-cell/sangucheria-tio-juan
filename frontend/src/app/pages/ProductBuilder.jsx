@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from "react";
 import { Package, Plus, Settings2, Save, X, Calculator, Trash2, RotateCcw, Pencil, Check, ChevronDown } from "lucide-react";
 import { api } from "./api.js";
-import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedNumberInput, formatMoney } from "../utils/numbers.js";
 import {
   isUnitSaleVariety,
   usesUnitRecipe,
@@ -134,7 +134,7 @@ function VarietyCard({
                             placeholder="0.00"
                           />
                         ) : (
-                          <span className="font-semibold text-gray-800">${pres.price.toFixed(2)}</span>
+                          <span className="font-semibold text-gray-800">{formatMoney(pres.price)}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -150,12 +150,12 @@ function VarietyCard({
                             placeholder="0.00"
                           />
                         ) : (
-                          <span className="font-semibold text-brand-2-dark">${(pres.wholesalePrice || 0).toFixed(2)}</span>
+                          <span className="font-semibold text-brand-2-dark">{formatMoney(pres.wholesalePrice || 0)}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col">
-                          <span className="font-bold text-gray-900">${cost.toFixed(2)}</span>
+                          <span className="font-bold text-gray-900">{formatMoney(cost)}</span>
                           {pres.price > 0 && cost > 0 && <span className={`text-xs font-medium ${margin >= 70 ? "text-green-600" : "text-brand-1"}`}>Margen: {margin.toFixed(1)}%</span>}
                         </div>
                       </td>
@@ -200,7 +200,7 @@ function VarietyCard({
                       placeholder="0.00"
                     />
                   ) : (
-                    <span className="font-bold text-brand-1 text-lg">${(variety.unitPrice || 0).toFixed(2)}</span>
+                    <span className="font-bold text-brand-1 text-lg">{formatMoney(variety.unitPrice || 0)}</span>
                   )}
                 </div>
                 {editingUnitPrice ? (
@@ -229,7 +229,7 @@ function VarietyCard({
                       placeholder="0.00"
                     />
                   ) : (
-                    <span className="font-bold text-brand-2-dark text-lg">${(variety.unitWholesalePrice || 0).toFixed(2)}</span>
+                    <span className="font-bold text-brand-2-dark text-lg">{formatMoney(variety.unitWholesalePrice || 0)}</span>
                   )}
                 </div>
                 {editingUnitWholesalePrice ? (
@@ -254,7 +254,7 @@ function VarietyCard({
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-bold text-gray-900 text-lg">
-                    ${getUnitManufacturingCost(variety, calculateRecipeCost).toFixed(2)}
+                    {formatMoney(getUnitManufacturingCost(variety, calculateRecipeCost))}
                   </span>
                   {usesUnitRecipe(variety) && (
                     <button
@@ -288,7 +288,7 @@ function VarietyCard({
                         <td className="px-4 py-3 font-medium text-gray-900">{pres.name}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col">
-                            <span className="font-bold text-gray-900">${cost2.toFixed(2)}</span>
+                            <span className="font-bold text-gray-900">{formatMoney(cost2)}</span>
                             {pres.price > 0 && cost2 > 0 && (
                               <span className={`text-xs font-medium ${margin2 >= 70 ? "text-green-600" : "text-brand-1"}`}>
                                 Margen: {margin2.toFixed(1)}%
@@ -640,7 +640,7 @@ export function ProductBuilder({ customInputs = [] }) {
                 <div className="flex gap-2">
                   <select value={selectedInsumo} onChange={(e) => setSelectedInsumo(e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                     <option value="">Seleccionar insumo...</option>
-                    {availableInsumos.map((insumo) => <option key={insumo.id} value={insumo.id}>{insumo.name} (${insumo.costPerUnit.toFixed(2)} x {insumo.unitMeasure})</option>)}
+                    {availableInsumos.map((insumo) => <option key={insumo.id} value={insumo.id}>{insumo.name} ({formatMoney(insumo.costPerUnit)} x {insumo.unitMeasure})</option>)}
                   </select>
                   <div className="w-24">
                     <input type="number" min="0" step="any" placeholder="Cant." value={insumoQuantity} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setInsumoQuantity(e.target.value); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
@@ -661,10 +661,10 @@ export function ProductBuilder({ customInputs = [] }) {
                       <li key={idx} className="flex justify-between items-center p-3 bg-gray-50 border border-gray-200 rounded-lg">
                         <div className="flex-1">
                           <p className="font-medium text-gray-900 text-sm">{insumo.name}</p>
-                          <p className="text-xs text-gray-500">{item.quantity} {insumo.unitMeasure} a ${insumo.costPerUnit}/{insumo.unitMeasure}</p>
+                          <p className="text-xs text-gray-500">{item.quantity} {insumo.unitMeasure} a {formatMoney(insumo.costPerUnit)}/{insumo.unitMeasure}</p>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="font-bold text-gray-900">${subtotal.toFixed(2)}</span>
+                          <span className="font-bold text-gray-900">{formatMoney(subtotal)}</span>
                           <button onClick={() => setTempRecipe(tempRecipe.filter((r) => r.insumoId !== item.insumoId))} className="text-gray-400 hover:text-brand-1"><Trash2 size={16} /></button>
                         </div>
                       </li>
@@ -676,7 +676,7 @@ export function ProductBuilder({ customInputs = [] }) {
             <div className="bg-gray-50 p-4 border-t border-gray-200 flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 font-medium">Costo Total Calculado</p>
-                <p className="text-2xl font-black text-gray-900">${calculateRecipeCost(tempRecipe).toFixed(2)}</p>
+                <p className="text-2xl font-black text-gray-900">{formatMoney(calculateRecipeCost(tempRecipe))}</p>
               </div>
               <button onClick={saveRecipe} className="bg-brand-1 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Confirmar Costos</button>
             </div>
@@ -798,7 +798,7 @@ export function ProductBuilder({ customInputs = [] }) {
                               >
                                 <option value="">Selecciona insumo...</option>
                                 {availableInsumos.map((i) => (
-                                  <option key={i.id} value={i.id}>{i.name} (${i.costPerUnit.toFixed(2)}/{i.unitMeasure})</option>
+                                  <option key={i.id} value={i.id}>{i.name} ({formatMoney(i.costPerUnit)}/{i.unitMeasure})</option>
                                 ))}
                               </select>
                             </div>
@@ -858,14 +858,14 @@ export function ProductBuilder({ customInputs = [] }) {
                       <div className="flex-1">
                         <select className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white outline-none focus:border-brand-2" value={ing.insumoId} onChange={(e) => { const newIngs = [...newVarIngredients]; newIngs[idx].insumoId = e.target.value; setNewVarIngredients(newIngs); }}>
                           <option value="">Selecciona insumo...</option>
-                          {availableInsumos.map((i) => <option key={i.id} value={i.id}>{i.name} (${i.costPerUnit.toFixed(2)}/{i.unitMeasure})</option>)}
+                          {availableInsumos.map((i) => <option key={i.id} value={i.id}>{i.name} ({formatMoney(i.costPerUnit)}/{i.unitMeasure})</option>)}
                         </select>
                       </div>
                       <div className="w-24">
                         <input type="number" min="0" step="any" placeholder="Cant." className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-brand-2" value={ing.quantity} onChange={(e) => { if (!isAllowedNumberInput(e.target.value)) return; const newIngs = [...newVarIngredients]; newIngs[idx].quantity = e.target.value; setNewVarIngredients(newIngs); }} />
                       </div>
                       <div className="w-20 h-[34px] mt-1 flex items-center justify-center px-1 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 font-medium">
-                        ${getRowCost(ing.insumoId, ing.quantity).toFixed(2)}
+                        {formatMoney(getRowCost(ing.insumoId, ing.quantity))}
                       </div>
                       {newVarIngredients.length > 1 && (
                         <button type="button" onClick={() => setNewVarIngredients(newVarIngredients.filter((_, i) => i !== idx))} className="mt-1 p-1.5 text-gray-400 hover:text-brand-1 hover:bg-brand-1/10 rounded-lg">

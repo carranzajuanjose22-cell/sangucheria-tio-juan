@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useMemo } from "react";
 import { Gift, Plus, Save, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { api } from "./api.js";
-import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedNumberInput, formatMoney } from "../utils/numbers.js";
 import { normalizeMigaCatalog } from "../utils/migaCatalog.js";
 import { normalizeUnitProductsCatalog } from "../utils/unitProductsCatalog.js";
 import {
@@ -238,10 +238,10 @@ export function PromotionsBuilder() {
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">{promo.name}</td>
                       <td className="px-6 py-4 text-sm text-gray-600 max-w-md">{getPromotionSummaryLabel(promo)}</td>
                       <td className="px-6 py-4 text-sm">
-                        <span className="font-bold text-brand-1-dark">${promo.price.toFixed(2)}</span>
+                        <span className="font-bold text-brand-1-dark">{formatMoney(promo.price)}</span>
                         {regular > promo.price && (
                           <span className="block text-xs text-green-600 mt-0.5">
-                            Ahorro ${(regular - promo.price).toFixed(2)} (antes ${regular.toFixed(2)})
+                            Ahorro {formatMoney(regular - promo.price)} (antes {formatMoney(regular)})
                           </span>
                         )}
                       </td>
@@ -313,7 +313,7 @@ export function PromotionsBuilder() {
                             <optgroup key={group} label={group}>
                               {groupItems.map((item) => (
                                 <option key={item.id} value={item.id}>
-                                  {item.name} (${item.price.toFixed(2)})
+                                  {item.name} ({formatMoney(item.price)})
                                 </option>
                               ))}
                             </optgroup>
@@ -367,14 +367,14 @@ export function PromotionsBuilder() {
               {previewComponents.length >= 2 && (
                 <div className="bg-brand-4/50 border border-brand-4 rounded-lg p-3 text-sm">
                   <p className="text-gray-700">
-                    <span className="font-medium">Precio normal:</span> ${previewRegular.toFixed(2)}
+                    <span className="font-medium">Precio normal:</span> {formatMoney(previewRegular)}
                   </p>
                   <p className="text-gray-700">
-                    <span className="font-medium">Precio promo:</span> ${previewPromo.toFixed(2)}
+                    <span className="font-medium">Precio promo:</span> {formatMoney(previewPromo)}
                   </p>
                   {previewSavings > 0 && (
                     <p className="text-green-700 font-semibold mt-1">
-                      El cliente ahorra ${previewSavings.toFixed(2)}
+                      El cliente ahorra {formatMoney(previewSavings)}
                     </p>
                   )}
                 </div>

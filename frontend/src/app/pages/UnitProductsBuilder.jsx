@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from "react";
 import { Tag, Plus, Save, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { api } from "./api.js";
-import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedNumberInput, formatMoney } from "../utils/numbers.js";
 import { normalizeUnitProductsCatalog } from "../utils/unitProductsCatalog.js";
 
 export function UnitProductsBuilder() {
@@ -155,8 +155,8 @@ export function UnitProductsBuilder() {
                 {catalog.products.map((product) => (
                   <tr key={product.id}>
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{product.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">${product.price.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm text-brand-2-dark">${product.wholesalePrice.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{formatMoney(product.price)}</td>
+                    <td className="px-6 py-4 text-sm text-brand-2-dark">{formatMoney(product.wholesalePrice)}</td>
                     <td className="px-6 py-4 text-sm font-medium text-right">
                       <button onClick={() => openModal(product)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
                         <Edit2 className="w-4 h-4" />

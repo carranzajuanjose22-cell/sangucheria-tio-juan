@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from "react";
 import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar } from "lucide-react";
-import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
 import { api } from "./api.js";
 
 export function Statistics() {
@@ -132,17 +132,15 @@ export function Statistics() {
   const tachosMayonesa = Math.floor(totalDocenas / 3);
 
   const productStats = {};
-  filteredSales.forEach((sale, saleIdx) => {
+  filteredSales.forEach((sale) => {
     sale.items.forEach((item) => {
-      if (!productStats[item.name]) productStats[item.name] = { quantity: 0, revenue: 0, lastSaleIdx: saleIdx };
-      productStats[item.name].quantity += item.quantity;
-      productStats[item.name].revenue += item.price * item.quantity;
-      productStats[item.name].lastSaleIdx = saleIdx;
+      if (!productStats[item.name]) productStats[item.name] = 0;
+      productStats[item.name] += item.quantity;
     });
   });
   const allProducts = Object.entries(productStats)
-    .map(([name, stats]) => ({ name, ...stats }))
-    .sort((a, b) => b.lastSaleIdx - a.lastSaleIdx);
+    .map(([name, quantity]) => ({ name, quantity }))
+    .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "es"));
 
   const employeeHoursStats = {};
   filteredRegisters.forEach((record) => {
@@ -189,9 +187,9 @@ export function Statistics() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         {[
-          { label: "Ingresos Totales", value: `$${totalRevenue.toFixed(2)}`, icon: DollarSign, bg: "bg-green-100", color: "text-green-600" },
-          { label: "Efectivo", value: `$${totalEfectivo.toFixed(2)}`, icon: DollarSign, bg: "bg-emerald-100", color: "text-emerald-600" },
-          { label: "Virtual", value: `$${totalVirtual.toFixed(2)}`, icon: CreditCard, bg: "bg-brand-4", color: "text-brand-1" },
+          { label: "Ingresos Totales", value: formatMoney(totalRevenue), icon: DollarSign, bg: "bg-green-100", color: "text-green-600" },
+          { label: "Efectivo", value: formatMoney(totalEfectivo), icon: DollarSign, bg: "bg-emerald-100", color: "text-emerald-600" },
+          { label: "Virtual", value: formatMoney(totalVirtual), icon: CreditCard, bg: "bg-brand-4", color: "text-brand-1" },
           { label: "Productos Vendidos", value: productsSold, icon: Package, bg: "bg-brand-4", color: "text-brand-1" },
           { label: "Mayonesa (Tachos)", value: tachosMayonesa, icon: Package, bg: "bg-yellow-200", color: "text-yellow-700", special: true },
         ].map(({ label, value, icon: Icon, bg, color, special }) => (
@@ -219,9 +217,9 @@ export function Statistics() {
           <div className="flex flex-col md:flex-row gap-8 items-center justify-between">
             <div className="flex-1 w-full space-y-4">
               {[
-                { icon: TrendingUp, label: "Ingresos (Ventas)", value: `$${totalRevenue.toFixed(2)}`, bg: "bg-green-50/50 border-green-100", iconBg: "bg-green-100 text-green-600", textColor: "text-green-700" },
-                { icon: TrendingDown, label: "Gastos Operativos (Caja)", value: `-$${totalVariableExpenses.toFixed(2)}`, bg: "bg-brand-1/10 border-brand-1/20", iconBg: "bg-brand-1/15 text-brand-1", textColor: "text-brand-1-dark" },
-                { icon: ShoppingCart, label: "Compras de Insumos", value: `-$${totalPurchases.toFixed(2)}`, bg: "bg-yellow-50/50 border-yellow-100", iconBg: "bg-yellow-100 text-yellow-600", textColor: "text-yellow-700" },
+                { icon: TrendingUp, label: "Ingresos (Ventas)", value: formatMoney(totalRevenue), bg: "bg-green-50/50 border-green-100", iconBg: "bg-green-100 text-green-600", textColor: "text-green-700" },
+                { icon: TrendingDown, label: "Gastos Operativos (Caja)", value: formatMoneyDebit(totalVariableExpenses), bg: "bg-brand-1/10 border-brand-1/20", iconBg: "bg-brand-1/15 text-brand-1", textColor: "text-brand-1-dark" },
+                { icon: ShoppingCart, label: "Compras de Insumos", value: formatMoneyDebit(totalPurchases), bg: "bg-yellow-50/50 border-yellow-100", iconBg: "bg-yellow-100 text-yellow-600", textColor: "text-yellow-700" },
               ].map(({ icon: Icon, label, value, bg, iconBg, textColor }) => (
                 <div key={label} className={`flex justify-between items-center p-4 ${bg} rounded-xl border`}>
                   <div className="flex items-center gap-3">
@@ -235,11 +233,11 @@ export function Statistics() {
             <div className="hidden md:flex items-center justify-center px-4"><ArrowRight className="text-gray-300 w-8 h-8" /></div>
             <div className={`flex-1 w-full p-8 rounded-2xl border flex flex-col items-center justify-center text-center ${netBalance >= 0 ? "bg-brand-4/50 border-brand-3/60" : "bg-brand-1/10 border-brand-1/25"}`}>
               <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Ganancia Neta Estimada</p>
-              <p className={`text-5xl font-black ${netBalance >= 0 ? "text-brand-1" : "text-brand-1"}`}>${netBalance.toFixed(2)}</p>
+              <p className={`text-5xl font-black ${netBalance >= 0 ? "text-brand-1" : "text-brand-1"}`}>{formatMoney(netBalance)}</p>
               <p className="text-sm text-gray-500 mt-4 max-w-[250px]">Balance de ingresos menos gastos variables y compras del período.</p>
               <div className="mt-4 text-xs text-gray-400 bg-white/50 border border-gray-200 rounded-lg px-3 py-2">
                 <p>Gastos fijos mensuales (servicios):</p>
-                <p className="font-bold text-gray-500">${monthlyFixedExpenses.toFixed(2)}</p>
+                <p className="font-bold text-gray-500">{formatMoney(monthlyFixedExpenses)}</p>
               </div>
             </div>
           </div>
@@ -250,22 +248,19 @@ export function Statistics() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Package className="w-5 h-5 text-gray-500" /> Desglose de Productos</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Cantidad vendida de cada ítem en el período</p>
           </div>
           <div className="p-6 overflow-y-auto max-h-[400px]">
             {allProducts.length === 0 ? (
               <p className="text-center text-gray-500 py-8">No hay datos disponibles</p>
             ) : (
-              <div className="space-y-4">
-                {allProducts.map((product, index) => (
-                  <div key={product.name} className="flex items-center justify-between border-b border-gray-100 last:border-0 pb-3 last:pb-0">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 bg-brand-4 text-brand-1 rounded-full flex items-center justify-center font-bold text-sm">{index + 1}</span>
-                      <div>
-                        <p className="font-medium text-gray-900">{product.name}</p>
-                        <p className="text-sm text-gray-500">{product.quantity} unidades</p>
-                      </div>
-                    </div>
-                    <p className="font-bold text-gray-900">${product.revenue.toFixed(2)}</p>
+              <div className="space-y-3">
+                {allProducts.map((product) => (
+                  <div key={product.name} className="flex items-center justify-between gap-4 border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                    <p className="font-medium text-gray-900 flex-1 min-w-0">{product.name}</p>
+                    <span className="shrink-0 px-3 py-1 bg-brand-4 text-brand-1 rounded-full font-bold text-sm tabular-nums">
+                      {product.quantity} {product.quantity === 1 ? "unidad" : "unidades"}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -329,7 +324,7 @@ export function Statistics() {
                       <div className="flex items-center gap-2 text-gray-600"><Calendar size={14} /><span className="text-sm">{new Date(purchase.date).toLocaleDateString("es-AR")}</span></div>
                     </td>
                     <td className="px-6 py-3"><span className="font-medium text-gray-900">{purchase.description}</span></td>
-                    <td className="px-6 py-3 text-right"><span className="font-bold text-brand-1">-${purchase.amount.toFixed(2)}</span></td>
+                    <td className="px-6 py-3 text-right"><span className="font-bold text-brand-1">{formatMoneyDebit(purchase.amount)}</span></td>
                   </tr>
                 ))}
               </tbody>

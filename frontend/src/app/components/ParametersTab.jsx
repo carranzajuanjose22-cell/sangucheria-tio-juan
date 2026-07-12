@@ -4,7 +4,7 @@ import { ProductBuilder } from "../pages/ProductBuilder.jsx";
 import { UnitProductsBuilder } from "../pages/UnitProductsBuilder.jsx";
 import { PromotionsBuilder } from "../pages/PromotionsBuilder.jsx";
 import { api } from "../pages/api.js";
-import { nonNegative, isAllowedNumberInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedNumberInput, formatMoney } from "../utils/numbers.js";
 
 export function ParametersTab() {
   const [services, setServices] = useState([]);
@@ -148,7 +148,7 @@ export function ParametersTab() {
             {services.map((s) => (
               <tr key={s.id}>
                 <td className="px-6 py-4 text-sm text-gray-900">{s.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-900">${s.cost}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{formatMoney(s.cost)}</td>
                 <td className="px-6 py-4 text-sm font-medium text-right">
                   <button onClick={() => openModal("service", s.id)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
                     <Edit2 className="w-4 h-4" />
@@ -215,7 +215,7 @@ export function ParametersTab() {
                 <td className="px-6 py-4 text-sm text-gray-900">{i.name}</td>
                 <td className="px-6 py-4 text-sm text-gray-500">{i.isFood ? "Alimenticio (Kg/Gramos)" : "Unidad"}</td>
                 <td className="px-6 py-4 text-sm text-gray-900">
-                  ${i.price} {i.isFood ? "/ Kg" : "/ Unidad"}
+                  {formatMoney(i.price)} {i.isFood ? "/ Kg" : "/ Unidad"}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-right">
                   <button onClick={() => openModal("input", i.id)} className="text-brand-1 hover:text-brand-1-dark mr-3 inline-block">
