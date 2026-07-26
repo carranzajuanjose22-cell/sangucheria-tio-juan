@@ -175,7 +175,7 @@ export function Registers() {
                   { label: "Total Tickets", value: selectedRegister.totalSalesCount, icon: Receipt, color: "blue" },
                   { label: "Ingresos", value: formatMoney(selectedRegister.totalIncome), icon: TrendingUp, color: "green" },
                   { label: "Gastos", value: formatMoneyDebit(selectedRegister.totalExpenses || 0), icon: TrendingDown, color: "red" },
-                  { label: "Total en Caja", value: formatMoney((selectedRegister.initialCash || 0) + selectedRegister.totalIncome - (selectedRegister.totalExpenses || 0)), icon: DollarSign, color: "yellow" },
+                  { label: "Efectivo en Caja", value: formatMoney(selectedRegister.expectedCash ?? ((selectedRegister.initialCash || 0) + selectedRegister.totalIncome - (selectedRegister.totalExpenses || 0))), icon: DollarSign, color: "yellow" },
                 ].map(({ label, value, icon: Icon, color }) => (
                   <div key={label} className={`bg-${color}-50/50 p-4 rounded-xl border border-${color}-100`}>
                     <div className="flex items-center gap-3">

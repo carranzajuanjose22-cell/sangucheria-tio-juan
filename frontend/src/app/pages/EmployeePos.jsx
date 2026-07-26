@@ -20,6 +20,8 @@ import { getUnitProductPrice, normalizeUnitProductsCatalog } from "../utils/unit
 import { getPromotionSummaryLabel, normalizePromotionsCatalog } from "../utils/promotionsCatalog.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister, appendSale } from "../utils/register.js";
+import { calculateExpectedCash } from "../utils/registerCash.js";
+import { RegisterCashSummary } from "../components/RegisterCashSummary.jsx";
 
 export function EmployeePos() {
   const location = useLocation();
@@ -203,8 +205,15 @@ export function EmployeePos() {
 
   const currentDate = new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const isRegisterClosed = !registerState?.isOpen;
-  const totalSalesToday = sales.reduce((sum, sale) => sum + sale.total, 0);
-  const totalExpensesToday = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const liveCashSummary = registerState?.isOpen
+    ? calculateExpectedCash({
+        initialCash: registerState.initialCash,
+        sales,
+        expenses,
+      })
+    : null;
+  const lastClosure = !registerState?.isOpen ? registerState?.lastClosure : null;
+  const cashSummary = liveCashSummary || lastClosure;
   const filteredMiga = migaMatrix.filter((row) => row.variety.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredOther = otherProducts.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredPromotions = promotions.filter((p) =>
@@ -562,7 +571,7 @@ export function EmployeePos() {
   };
 
   const handleCloseRegister = async () => {
-    if (!registerState) return;
+    if (!registerState?.isOpen) return;
     try {
       await closeRegister({ employee: userName, closedBy: userName });
       await refreshPosStore();
@@ -581,6 +590,11 @@ export function EmployeePos() {
             Caja {isRegisterClosed ? "Cerrada" : "Abierta"}: #01 • {userName}
           </p>
           {registerState?.isOpen && <p className="text-xs text-gray-400 mt-1">Monto inicial: {formatMoney(registerState.initialCash)}</p>}
+          {!registerState?.isOpen && lastClosure && (
+            <p className="text-xs text-brand-1 mt-1 font-medium">
+              Efectivo a corroborar: {formatMoney(lastClosure.expectedCash)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -603,6 +617,21 @@ export function EmployeePos() {
           )}
         </div>
       </div>
+
+      {!registerState?.isOpen && lastClosure && (
+        <RegisterCashSummary
+          summary={lastClosure}
+          title="Arqueo del último cierre — corroborá el efectivo en caja"
+        />
+      )}
+
+      {registerState?.isOpen && liveCashSummary && (
+        <RegisterCashSummary
+          summary={liveCashSummary}
+          title="Efectivo esperado en caja (turno en curso)"
+          compact
+        />
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 h-[65vh] min-h-[500px]">
         <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
@@ -981,12 +1010,8 @@ export function EmployeePos() {
                   <Lock size={32} />
                 </div>
                 <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
-                <div className="w-full bg-brand-4 border border-brand-3/60 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">{formatMoney(registerState?.initialCash || 0)}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ventas:</span><span className="font-medium">{sales.length}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">{formatMoney(totalSalesToday)}</span></div>
-                  <div className="flex justify-between text-sm border-b border-brand-3/60 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-brand-1">{formatMoneyDebit(totalExpensesToday)}</span></div>
-                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-brand-1">{formatMoney((registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday)}</span></div>
+                <div className="w-full">
+                  <RegisterCashSummary summary={liveCashSummary} title={null} compact />
                 </div>
                 {pendingOrders.length === 0 && (
                   <p className="text-brand-1 font-medium text-sm mt-4">⚠️ Esta acción no se puede deshacer</p>
@@ -1016,7 +1041,12 @@ export function EmployeePos() {
       {modalState === "closeSuccess" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-6 flex flex-col items-center"><div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3"><CheckCircle2 size={32} /></div><h4 className="text-xl font-bold text-gray-900 mb-2">¡Caja Cerrada Exitosamente!</h4><p className="text-gray-600 text-center">El cierre ha sido registrado.</p></div>
+            <div className="p-6 flex flex-col items-center">
+              <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3"><CheckCircle2 size={32} /></div>
+              <h4 className="text-xl font-bold text-gray-900 mb-2">¡Caja Cerrada Exitosamente!</h4>
+              <p className="text-gray-600 text-center mb-4">Contá el efectivo en caja y comparalo con este monto:</p>
+              {lastClosure && <RegisterCashSummary summary={lastClosure} title={null} compact />}
+            </div>
             <div className="p-4 border-t bg-gray-50"><button onClick={() => setModalState("none")} className="w-full bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Entendido</button></div>
           </div>
         </div>

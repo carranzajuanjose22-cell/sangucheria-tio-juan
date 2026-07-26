@@ -4,6 +4,8 @@ import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } fro
 import { api } from "./api.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister } from "../utils/register.js";
+import { calculateExpectedCash } from "../utils/registerCash.js";
+import { RegisterCashSummary } from "../components/RegisterCashSummary.jsx";
 
 export function Dashboard() {
   const userName = (() => {
@@ -66,7 +68,7 @@ export function Dashboard() {
   };
 
   const handleCloseRegister = async () => {
-    if (!registerState) return;
+    if (!registerState?.isOpen) return;
     try {
       await closeRegister({ employee: userName, closedBy: userName });
       await refreshPosStore();
@@ -82,6 +84,15 @@ export function Dashboard() {
   const currentTimeStr = currentTime.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   const totalSalesToday = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalExpensesToday = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const liveCashSummary = registerState?.isOpen
+    ? calculateExpectedCash({
+        initialCash: registerState.initialCash,
+        sales,
+        expenses,
+      })
+    : null;
+  const lastClosure = !registerState?.isOpen ? registerState?.lastClosure : null;
+  const cashSummary = liveCashSummary || lastClosure;
   const currentMonthRegisters = registers.filter((r) => {
     const d = new Date(r.date);
     return d.getMonth() === currentTime.getMonth() && d.getFullYear() === currentTime.getFullYear();
@@ -120,7 +131,9 @@ export function Dashboard() {
                 <p className="text-gray-600 mt-1">
                   {registerState?.isOpen
                     ? `Abierta el ${new Date(registerState.openedAt).toLocaleDateString("es-AR")} a las ${new Date(registerState.openedAt).toLocaleTimeString("es-AR", { hour12: false })}`
-                    : "No hay caja abierta actualmente"}
+                    : lastClosure
+                      ? `Cerrada el ${new Date(lastClosure.closedAt).toLocaleDateString("es-AR")} a las ${new Date(lastClosure.closedAt).toLocaleTimeString("es-AR", { hour12: false })}`
+                      : "No hay caja abierta actualmente"}
                 </p>
               </div>
             </div>
@@ -137,11 +150,11 @@ export function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             {[
-              { label: "Efectivo Inicial", value: registerState?.isOpen ? formatMoney(registerState.initialCash) : formatMoney(0) },
-              { label: "Ventas Realizadas", value: sales.length },
-              { label: "Total Vendido", value: formatMoney(totalSalesToday) },
-              { label: "Gastos Registrados", value: formatMoneyDebit(totalExpensesToday), red: true },
-              { label: "Efectivo en Caja", value: registerState?.isOpen ? formatMoney(registerState.initialCash + totalSalesToday - totalExpensesToday) : formatMoney(0), green: true },
+              { label: "Efectivo Inicial", value: formatMoney(cashSummary?.initialCash || 0) },
+              { label: "Ventas Realizadas", value: cashSummary?.totalSalesCount || 0 },
+              { label: "Total Vendido", value: formatMoney(cashSummary?.totalIncome || 0) },
+              { label: "Gastos Retirados", value: formatMoneyDebit(cashSummary?.totalExpenses || 0), red: true },
+              { label: "Efectivo Esperado", value: formatMoney(cashSummary?.expectedCash || 0), green: true },
             ].map(({ label, value, red, green }) => (
               <div key={label} className="bg-white rounded-xl p-5 border border-gray-200">
                 <p className="text-sm text-gray-600 mb-2">{label}</p>
@@ -149,6 +162,24 @@ export function Dashboard() {
               </div>
             ))}
           </div>
+
+          {!registerState?.isOpen && lastClosure && (
+            <div className="mb-6">
+              <RegisterCashSummary
+                summary={lastClosure}
+                title="Arqueo del último cierre — corroborá el efectivo en caja"
+              />
+            </div>
+          )}
+
+          {registerState?.isOpen && liveCashSummary && (
+            <div className="mb-6">
+              <RegisterCashSummary
+                summary={liveCashSummary}
+                title="Efectivo esperado en caja (turno en curso)"
+              />
+            </div>
+          )}
 
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm mb-6">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-3 gap-2">
@@ -256,12 +287,8 @@ export function Dashboard() {
               <div className="flex flex-col items-center justify-center mb-6">
                 <div className="w-16 h-16 bg-brand-1/15 text-brand-1 rounded-full flex items-center justify-center mb-3"><Lock size={32} /></div>
                 <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
-                <div className="w-full bg-brand-4 border border-brand-3/60 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">{formatMoney(registerState?.initialCash || 0)}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ventas:</span><span className="font-medium">{sales.length}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">{formatMoney(totalSalesToday)}</span></div>
-                  <div className="flex justify-between text-sm border-b border-brand-3/60 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-brand-1">{formatMoneyDebit(totalExpensesToday)}</span></div>
-                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-brand-1">{formatMoney((registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday)}</span></div>
+                <div className="w-full bg-brand-4 border border-brand-3/60 rounded-lg p-4">
+                  <RegisterCashSummary summary={liveCashSummary} title={null} compact />
                 </div>
                 <p className="text-brand-1 font-medium text-sm mt-4 text-center">⚠️ Esta acción no se puede deshacer</p>
               </div>
@@ -292,7 +319,8 @@ export function Dashboard() {
             <div className="p-6 flex flex-col items-center justify-center">
               <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3"><CheckCircle2 size={32} /></div>
               <h4 className="text-xl font-bold text-gray-900 mb-2">¡Caja Cerrada Exitosamente!</h4>
-              <p className="text-gray-600 text-center">Puedes consultar los detalles en la sección de "Cajas".</p>
+              <p className="text-gray-600 text-center mb-4">Contá el efectivo en caja y comparalo con este monto:</p>
+              {lastClosure && <RegisterCashSummary summary={lastClosure} title={null} compact />}
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50">
               <button onClick={() => setModalState("none")} className="w-full bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Entendido</button>
