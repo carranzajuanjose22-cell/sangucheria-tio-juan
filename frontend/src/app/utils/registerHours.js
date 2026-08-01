@@ -1,3 +1,5 @@
+import { clipIntervalHours, intervalOverlapsRange, isDateInRange } from "./dateRanges.js";
+
 export function getShiftDurationHours(openedAt, closedAt) {
   if (!openedAt || !closedAt) return 0;
   const start = new Date(openedAt).getTime();
@@ -34,22 +36,24 @@ export function getRegisterWorker(record) {
 
 function shouldIncludeOpenShift(registerState, dateRange, now = new Date()) {
   if (!registerState?.isOpen || !registerState.openedAt) return false;
-
-  const openedAt = new Date(registerState.openedAt);
-  if (Number.isNaN(openedAt.getTime())) return false;
-
   if (dateRange === "all") return true;
 
-  if (dateRange === "today") {
-    return openedAt.toLocaleDateString("es-AR") === now.toLocaleDateString("es-AR");
+  return intervalOverlapsRange(registerState.openedAt, now.toISOString(), dateRange, now);
+}
+
+function getClosedShiftHours(record, dateRange, now = new Date()) {
+  const closedAt = record.date || record.closedAt;
+  if (!closedAt) return 0;
+
+  if (dateRange !== "all" && !isDateInRange(closedAt, dateRange, now)) {
+    return 0;
   }
 
-  const cutoff = new Date(now);
-  if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
-  else if (dateRange === "month") cutoff.setDate(now.getDate() - 30);
-  else return true;
+  if (record.shiftHours != null && !Number.isNaN(Number(record.shiftHours)) && dateRange === "all") {
+    return Number(record.shiftHours);
+  }
 
-  return openedAt >= cutoff;
+  return clipIntervalHours(record.openedAt, closedAt, dateRange, now);
 }
 
 export function buildEmployeeHoursStats(registers = [], registerState = null, dateRange = "all", now = new Date()) {
@@ -66,22 +70,13 @@ export function buildEmployeeHoursStats(registers = [], registerState = null, da
     const worker = getRegisterWorker(record);
     if (!worker) return;
 
-    const closedAt = record.date || record.closedAt;
-    if (!closedAt) return;
-
-    const hours =
-      record.shiftHours != null && !Number.isNaN(Number(record.shiftHours))
-        ? Number(record.shiftHours)
-        : getShiftDurationHours(record.openedAt, closedAt);
-
+    const hours = getClosedShiftHours(record, dateRange, now);
     addShift(worker, hours);
   });
 
   if (shouldIncludeOpenShift(registerState, dateRange, now)) {
-    addShift(
-      registerState.openedBy || "Desconocido",
-      getShiftDurationHours(registerState.openedAt, now.toISOString())
-    );
+    const hours = clipIntervalHours(registerState.openedAt, now.toISOString(), dateRange, now);
+    addShift(registerState.openedBy || "Desconocido", hours);
   }
 
   return Object.entries(stats)

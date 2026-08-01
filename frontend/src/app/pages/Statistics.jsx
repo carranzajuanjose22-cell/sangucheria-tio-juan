@@ -3,6 +3,7 @@ import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDow
 import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
 import { api } from "./api.js";
 import { buildEmployeeHoursStats, formatShiftHours } from "../utils/registerHours.js";
+import { isDateInRange } from "../utils/dateRanges.js";
 
 export function Statistics() {
   const [registers, setRegisters] = useState([]);
@@ -46,28 +47,19 @@ export function Statistics() {
       .catch(() => {});
   }, []);
 
-  const todayStr = () => new Date().toLocaleDateString("es-AR");
+
+  const isInSelectedRange = (dateInput) => isDateInRange(dateInput, dateRange);
 
   const getFilteredRegisters = () => {
-    if (dateRange === "today") return registers.filter((r) => new Date(r.date).toLocaleDateString("es-AR") === todayStr());
-    const now = new Date();
-    const cutoff = new Date();
-    if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
-    else if (dateRange === "month") cutoff.setDate(now.getDate() - 30);
-    else return registers;
-    return registers.filter((r) => new Date(r.date) >= cutoff);
+    if (dateRange === "all") return registers;
+    return registers.filter((r) => isInSelectedRange(r.date));
   };
 
   const filteredRegisters = getFilteredRegisters();
 
   const getFilteredCurrentSales = () => {
-    if (dateRange === "today") return currentSales.filter((s) => new Date(s.date).toLocaleDateString("es-AR") === todayStr());
     if (dateRange === "all") return currentSales;
-    const now = new Date();
-    const cutoff = new Date();
-    if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
-    else cutoff.setDate(now.getDate() - 30);
-    return currentSales.filter((s) => new Date(s.date) >= cutoff);
+    return currentSales.filter((s) => isInSelectedRange(s.date));
   };
 
   const filteredSales = [
@@ -76,25 +68,16 @@ export function Statistics() {
   ];
 
   const getFilteredPurchases = () => {
-    if (dateRange === "today") return purchases.filter((p) => new Date(p.date).toLocaleDateString("es-AR") === todayStr());
-    const now = new Date();
-    const cutoff = new Date();
-    if (dateRange === "week") cutoff.setDate(now.getDate() - 7);
-    else if (dateRange === "month") cutoff.setDate(now.getDate() - 30);
-    else return purchases;
-    return purchases.filter((p) => new Date(p.date) >= cutoff);
+    if (dateRange === "all") return purchases;
+    return purchases.filter((p) => isInSelectedRange(p.date));
   };
 
   const filteredPurchases = getFilteredPurchases();
   const totalPurchases = filteredPurchases.reduce((sum, p) => sum + p.amount, 0);
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
   const filteredCurrentExpenses = (() => {
-    if (dateRange === "today") return currentExpenses.filter((e) => new Date(e.date).toLocaleDateString("es-AR") === todayStr());
     if (dateRange === "all") return currentExpenses;
-    const cutoff = new Date();
-    if (dateRange === "week") cutoff.setDate(cutoff.getDate() - 7);
-    else cutoff.setDate(cutoff.getDate() - 30);
-    return currentExpenses.filter((e) => new Date(e.date) >= cutoff);
+    return currentExpenses.filter((e) => isInSelectedRange(e.date));
   })();
   const totalVariableExpenses =
     filteredRegisters.reduce((sum, r) => sum + (r.totalExpenses || 0), 0) +
@@ -162,7 +145,12 @@ export function Statistics() {
     }
   };
 
-  const rangeButtons = [{ id: "today", label: "Hoy" }, { id: "week", label: "Última Semana" }, { id: "month", label: "Último Mes" }, { id: "all", label: "Todo" }];
+  const rangeButtons = [
+    { id: "today", label: "Hoy" },
+    { id: "week", label: "Esta Semana" },
+    { id: "month", label: "Este Mes" },
+    { id: "all", label: "Todo" },
+  ];
 
   return (
     <div className="space-y-6">
