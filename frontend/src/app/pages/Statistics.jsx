@@ -2,6 +2,7 @@
 import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
 import { api } from "./api.js";
+import { buildEmployeeHoursStats, formatShiftHours } from "../utils/registerHours.js";
 
 export function Statistics() {
   const [registers, setRegisters] = useState([]);
@@ -14,20 +15,23 @@ export function Statistics() {
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [catalog, setCatalog] = useState(null);
   const [currentExpenses, setCurrentExpenses] = useState([]);
+  const [registerState, setRegisterState] = useState(null);
 
   const loadData = async () => {
-    const [savedRegs, savedPurchases, savedCatalog, savedSales, savedExpenses] = await Promise.all([
+    const [savedRegs, savedPurchases, savedCatalog, savedSales, savedExpenses, savedRegisterState] = await Promise.all([
       api.get("/store/pos_registers").catch(() => []),
       api.get("/store/pos_purchases").catch(() => []),
       api.get("/catalog/MIGA").catch(() => null),
       api.get("/store/pos_sales").catch(() => []),
       api.get("/store/pos_expenses").catch(() => []),
+      api.get("/store/register_state").catch(() => null),
     ]);
     setRegisters(savedRegs || []);
     setPurchases(savedPurchases || []);
     setCatalog(savedCatalog);
     setCurrentSales(savedSales || []);
     setCurrentExpenses(savedExpenses || []);
+    setRegisterState(savedRegisterState);
   };
 
   useEffect(() => {
@@ -142,16 +146,7 @@ export function Statistics() {
     .map(([name, quantity]) => ({ name, quantity }))
     .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "es"));
 
-  const employeeHoursStats = {};
-  filteredRegisters.forEach((record) => {
-    if (record.openedAt && record.date) {
-      const diffHours = (new Date(record.date) - new Date(record.openedAt)) / 3600000;
-      if (!employeeHoursStats[record.employee]) employeeHoursStats[record.employee] = { hours: 0, shifts: 0 };
-      employeeHoursStats[record.employee].hours += diffHours;
-      employeeHoursStats[record.employee].shifts += 1;
-    }
-  });
-  const employeeHoursArray = Object.entries(employeeHoursStats).map(([name, stats]) => ({ name, ...stats })).sort((a, b) => b.hours - a.hours);
+  const employeeHoursArray = buildEmployeeHoursStats(filteredRegisters, registerState, dateRange);
 
   const handleRegisterPurchase = async () => {
     const amount = nonNegative(purchaseAmount);
@@ -166,8 +161,6 @@ export function Statistics() {
       alert("Error al registrar la compra. Revisa tu conexión.");
     }
   };
-
-  const formatHours = (h) => `${Math.floor(h)}h ${Math.round((h - Math.floor(h)) * 60).toString().padStart(2, "0")}m`;
 
   const rangeButtons = [{ id: "today", label: "Hoy" }, { id: "week", label: "Última Semana" }, { id: "month", label: "Último Mes" }, { id: "all", label: "Todo" }];
 
@@ -271,6 +264,7 @@ export function Statistics() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-gray-500" /> Horas Trabajadas por Cajero</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Cada cajero suma horas cuando abre y cierra la misma sesión de caja</p>
           </div>
           <div className="p-6">
             {employeeHoursArray.length === 0 ? (
@@ -287,7 +281,7 @@ export function Statistics() {
                           <p className="font-medium text-gray-900">{emp.name}</p>
                           <p className="text-sm text-gray-500">{emp.shifts} turno{emp.shifts !== 1 ? "s" : ""}</p>
                         </div>
-                        <p className="font-bold text-gray-900">{formatHours(emp.hours)}</p>
+                        <p className="font-bold text-gray-900">{formatShiftHours(emp.hours)}</p>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-3">
                         <div className="bg-brand-1 h-3 rounded-full transition-all" style={{ width: `${percentage}%` }} />

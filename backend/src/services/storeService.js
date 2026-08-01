@@ -109,6 +109,14 @@ function calculateRegisterCashSummary(initialCash, sales, expenses) {
   };
 }
 
+function getShiftDurationHours(openedAt, closedAt) {
+  if (!openedAt || !closedAt) return 0;
+  const start = new Date(openedAt).getTime();
+  const end = new Date(closedAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0;
+  return (end - start) / 3600000;
+}
+
 async function closeRegister({ employee, closedBy }) {
   const registerState = await getValue('register_state');
   if (!registerState?.isOpen) {
@@ -130,23 +138,33 @@ async function closeRegister({ employee, closedBy }) {
   const expenses = (await getValue('pos_expenses')) || [];
   const registers = (await getValue('pos_registers')) || [];
   const cashSummary = calculateRegisterCashSummary(registerState.initialCash, sales, expenses);
+  const closedAt = new Date().toISOString();
+  const opener = registerState.openedBy || null;
+  const closer = closedBy || employee || 'Desconocido';
+  const samePersonShift = Boolean(opener && closer && opener === closer);
+  const shiftHours = samePersonShift
+    ? getShiftDurationHours(registerState.openedAt, closedAt)
+    : 0;
+  const shiftWorker = samePersonShift ? closer : null;
 
   const closeRecord = {
     id: crypto.randomUUID(),
-    date: new Date().toISOString(),
+    date: closedAt,
     totalSalesCount: cashSummary.totalSalesCount,
     totalIncome: cashSummary.totalIncome,
     totalExpenses: cashSummary.totalExpenses,
     cashSales: cashSummary.cashSales,
     expectedCash: cashSummary.expectedCash,
     employee: employee || 'Desconocido',
-    closedBy: closedBy || employee || 'Desconocido',
+    closedBy: closer,
     openedBy: registerState.openedBy,
     registerNumber: 'Caja 01',
     sales,
     expenses,
     initialCash: registerState.initialCash,
     openedAt: registerState.openedAt,
+    shiftHours,
+    shiftWorker,
   };
 
   await setValue('pos_registers', [closeRecord, ...registers]);
