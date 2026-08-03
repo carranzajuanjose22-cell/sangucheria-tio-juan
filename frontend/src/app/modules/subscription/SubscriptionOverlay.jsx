@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { AlertTriangle, Lock, X, LogOut } from "lucide-react";
 import { useSubscription } from "./SubscriptionContext.jsx";
 import { useLocation, useNavigate } from "react-router";
@@ -65,8 +65,8 @@ export function SubscriptionOverlay() {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-md bg-white/30">
         <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center border border-gray-100">
-          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Lock className="w-10 h-10 text-red-600" />
+          <div className="w-20 h-20 bg-brand-1/15 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-10 h-10 text-brand-1" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Suscripción Vencida</h2>
           <p className="text-gray-600 mb-6">
@@ -87,10 +87,10 @@ export function SubscriptionOverlay() {
   // Toast de aviso de vencimiento próximo
   if (showWarning && userRole !== "creator" && !isLoginPage && !isCreatorPage) {
     return (
-      <div className="fixed bottom-4 right-4 z-[9990] bg-white rounded-lg shadow-xl border-l-4 border-amber-500 p-4 max-w-sm w-full transition-all transform duration-300 ease-out translate-y-0 opacity-100">
+      <div className="fixed bottom-4 right-4 z-[9990] bg-white rounded-lg shadow-xl border-l-4 border-brand-3 p-4 max-w-sm w-full transition-all transform duration-300 ease-out translate-y-0 opacity-100">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-brand-3-dark mt-0.5 flex-shrink-0" />
             <div>
               <h3 className="font-medium text-gray-900">Aviso de Servicio</h3>
               <p className="text-sm text-gray-600 mt-1">

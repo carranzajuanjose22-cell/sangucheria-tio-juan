@@ -63,6 +63,60 @@ async function appendToArray(key, item, idField = 'id') {
   return { items, duplicate: false };
 }
 
+function isCashPaymentMethod(method) {
+  const normalized = String(method || '').toLowerCase().trim();
+  return normalized === 'efectivo' || normalized === 'seña' || normalized === 'sena';
+}
+
+function getCashFromSales(sales) {
+  return (sales || []).reduce((sum, sale) => {
+    if (sale.payments?.length > 0) {
+      return sum + sale.payments.reduce(
+        (paymentSum, payment) => (
+          isCashPaymentMethod(payment.method)
+            ? paymentSum + (Number(payment.amount) || 0)
+            : paymentSum
+        ),
+        0
+      );
+    }
+
+    const legacyMethod = String(sale.paymentMethod || '').toLowerCase();
+    if (legacyMethod.includes('efectivo') && !legacyMethod.includes('débito') && !legacyMethod.includes('debito')) {
+      return sum + (Number(sale.total) || 0);
+    }
+    if (isCashPaymentMethod(sale.paymentMethod)) {
+      return sum + (Number(sale.total) || 0);
+    }
+
+    return sum;
+  }, 0);
+}
+
+function calculateRegisterCashSummary(initialCash, sales, expenses) {
+  const initial = Number(initialCash) || 0;
+  const cashSales = getCashFromSales(sales);
+  const totalExpenses = (expenses || []).reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0);
+  const totalIncome = (sales || []).reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+
+  return {
+    initialCash: initial,
+    cashSales,
+    totalExpenses,
+    totalIncome,
+    totalSalesCount: (sales || []).length,
+    expectedCash: initial + cashSales - totalExpenses,
+  };
+}
+
+function getShiftDurationHours(openedAt, closedAt) {
+  if (!openedAt || !closedAt) return 0;
+  const start = new Date(openedAt).getTime();
+  const end = new Date(closedAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0;
+  return (end - start) / 3600000;
+}
+
 async function closeRegister({ employee, closedBy }) {
   const registerState = await getValue('register_state');
   if (!registerState?.isOpen) {
@@ -83,25 +137,49 @@ async function closeRegister({ employee, closedBy }) {
   const sales = (await getValue('pos_sales')) || [];
   const expenses = (await getValue('pos_expenses')) || [];
   const registers = (await getValue('pos_registers')) || [];
+  const cashSummary = calculateRegisterCashSummary(registerState.initialCash, sales, expenses);
+  const closedAt = new Date().toISOString();
+  const opener = registerState.openedBy || null;
+  const closer = closedBy || employee || 'Desconocido';
+  const samePersonShift = Boolean(opener && closer && opener === closer);
+  const shiftHours = samePersonShift
+    ? getShiftDurationHours(registerState.openedAt, closedAt)
+    : 0;
+  const shiftWorker = samePersonShift ? closer : null;
 
   const closeRecord = {
     id: crypto.randomUUID(),
-    date: new Date().toISOString(),
-    totalSalesCount: sales.length,
-    totalIncome: sales.reduce((acc, sale) => acc + (sale.total || 0), 0),
-    totalExpenses: expenses.reduce((acc, exp) => acc + (exp.amount || 0), 0),
+    date: closedAt,
+    totalSalesCount: cashSummary.totalSalesCount,
+    totalIncome: cashSummary.totalIncome,
+    totalExpenses: cashSummary.totalExpenses,
+    cashSales: cashSummary.cashSales,
+    expectedCash: cashSummary.expectedCash,
     employee: employee || 'Desconocido',
-    closedBy: closedBy || employee || 'Desconocido',
+    closedBy: closer,
     openedBy: registerState.openedBy,
     registerNumber: 'Caja 01',
     sales,
     expenses,
     initialCash: registerState.initialCash,
     openedAt: registerState.openedAt,
+    shiftHours,
+    shiftWorker,
   };
 
   await setValue('pos_registers', [closeRecord, ...registers]);
-  await setValue('register_state', null);
+  await setValue('register_state', {
+    isOpen: false,
+    lastClosure: {
+      registerId: closeRecord.id,
+      closedAt: closeRecord.date,
+      openedAt: registerState.openedAt,
+      openedBy: registerState.openedBy,
+      closedBy: closeRecord.closedBy,
+      employee: closeRecord.employee,
+      ...cashSummary,
+    },
+  });
   await setValue('pos_sales', []);
   await setValue('pos_expenses', []);
   await setValue('pos_pending_orders', []);

@@ -1,17 +1,27 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
-import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow } from "lucide-react";
+import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow, Gift } from "lucide-react";
 import { api } from "./api.js";
-import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
+import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
 import {
   calculateSaleTotals,
   buildInitialPayments,
   applyPaymentMethodChange,
   removePaymentLine,
+  applyDiscountChange,
 } from "../utils/payments.js";
-import { isUnitSaleVariety, normalizeMigaCatalog } from "../utils/migaCatalog.js";
+import {
+  isUnitSaleVariety,
+  getPresentationPrice,
+  getUnitSalePrice,
+  normalizeMigaCatalog,
+} from "../utils/migaCatalog.js";
+import { getUnitProductPrice, normalizeUnitProductsCatalog } from "../utils/unitProductsCatalog.js";
+import { getPromotionSummaryLabel, normalizePromotionsCatalog } from "../utils/promotionsCatalog.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister, appendSale } from "../utils/register.js";
+import { calculateExpectedCash } from "../utils/registerCash.js";
+import { RegisterCashSummary } from "../components/RegisterCashSummary.jsx";
 
 export function EmployeePos() {
   const location = useLocation();
@@ -43,7 +53,8 @@ export function EmployeePos() {
   const [expenseDesc, setExpenseDesc] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [migaMatrix, setMigaMatrix] = useState([]);
-  const [otherProducts] = useState([]);
+  const [otherProducts, setOtherProducts] = useState([]);
+  const [promotions, setPromotions] = useState([]);
   const [migaTitle, setMigaTitle] = useState("Sándwiches de Miga");
   const [migaHeaders, setMigaHeaders] = useState(["Docena", "Media Docena", "Plancha de 3"]);
   const [migaOptionModal, setMigaOptionModal] = useState(false);
@@ -57,8 +68,12 @@ export function EmployeePos() {
   const [inputs, setInputs] = useState([]);
   const [eggCount, setEggCount] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(null);
-  const [unitSaleModal, setUnitSaleModal] = useState(null); // Para venta por unidad
+  const [unitSaleModal, setUnitSaleModal] = useState(null);
   const [unitQuantity, setUnitQuantity] = useState(1);
+  const [priceTier, setPriceTier] = useState("retail");
+  const [discountPercent, setDiscountPercent] = useState("0");
+  const [otherProductModal, setOtherProductModal] = useState(null);
+  const [otherProductQuantity, setOtherProductQuantity] = useState(1);
 
   useEffect(() => {
     const loadInputs = async () => {
@@ -133,13 +148,92 @@ export function EmployeePos() {
     };
   }, []);
 
+  useEffect(() => {
+    const applyOtherProducts = (parsed) => {
+      const catalog = normalizeUnitProductsCatalog(parsed);
+      setOtherProducts(catalog.products.filter((p) => p.name.trim()));
+    };
+
+    const loadOtherFromApi = async () => {
+      try {
+        const data = await api.get("/catalog/OTROS");
+        localStorage.setItem("pos_other_products", JSON.stringify(data));
+        applyOtherProducts(data);
+      } catch {
+        const saved = localStorage.getItem("pos_other_products");
+        if (saved) applyOtherProducts(JSON.parse(saved));
+        else setOtherProducts([]);
+      }
+    };
+
+    loadOtherFromApi();
+    const interval = setInterval(loadOtherFromApi, 30000);
+    const onCatalogUpdate = () => loadOtherFromApi();
+    window.addEventListener("catalog-updated", onCatalogUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("catalog-updated", onCatalogUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const applyPromotions = (parsed) => {
+      setPromotions(normalizePromotionsCatalog(parsed).promotions);
+    };
+
+    const loadPromotionsFromApi = async () => {
+      try {
+        const data = await api.get("/catalog/PROMOCIONES");
+        localStorage.setItem("pos_promotions", JSON.stringify(data));
+        applyPromotions(data);
+      } catch {
+        const saved = localStorage.getItem("pos_promotions");
+        if (saved) applyPromotions(JSON.parse(saved));
+        else setPromotions([]);
+      }
+    };
+
+    loadPromotionsFromApi();
+    const interval = setInterval(loadPromotionsFromApi, 30000);
+    const onCatalogUpdate = () => loadPromotionsFromApi();
+    window.addEventListener("catalog-updated", onCatalogUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("catalog-updated", onCatalogUpdate);
+    };
+  }, []);
+
   const currentDate = new Date().toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const isRegisterClosed = !registerState?.isOpen;
-  const totalSalesToday = sales.reduce((sum, sale) => sum + sale.total, 0);
-  const totalExpensesToday = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const liveCashSummary = registerState?.isOpen
+    ? calculateExpectedCash({
+        initialCash: registerState.initialCash,
+        sales,
+        expenses,
+      })
+    : null;
+  const lastClosure = !registerState?.isOpen ? registerState?.lastClosure : null;
+  const cashSummary = liveCashSummary || lastClosure;
   const filteredMiga = migaMatrix.filter((row) => row.variety.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredOther = otherProducts.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const hasUnitSaleVarieties = migaMatrix.some((row) => isUnitSaleVariety(row.variety));
+  const filteredPromotions = promotions.filter((p) =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    || getPromotionSummaryLabel(p).toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const hasUnitSaleVarieties = migaMatrix.some((row) => isUnitSaleVariety(row.varietyData || row.variety));
+
+  const addPromotionToCart = (promotion) => {
+    if (isRegisterClosed || !promotion || promotion.price <= 0) return;
+    const summary = getPromotionSummaryLabel(promotion);
+    setCart((current) => [...current, {
+      id: `promo-${promotion.id}-${Date.now()}`,
+      name: `${promotion.name} (${summary})`,
+      price: promotion.price,
+      quantity: 1,
+      isPromotion: true,
+      promotionId: promotion.id,
+    }]);
+  };
 
   const addToCart = (product) => {
     setCart((current) => {
@@ -152,23 +246,31 @@ export function EmployeePos() {
   const openUnitSaleModal = (variety) => {
     if (isRegisterClosed || !variety) return;
     setUnitQuantity(1);
+    setPriceTier("retail");
     setUnitSaleModal(variety);
   };
 
   const openPresentationOptions = (variety, presentationName) => {
     const product = variety.presentations.find((p) => p.name === presentationName);
     if (!product) return;
-    setPendingMigaProduct({ ...product, name: `${product.name} de ${variety.name}` });
+    setPendingMigaProduct({
+      ...product,
+      name: `${product.name} de ${variety.name}`,
+      varietyName: variety.name,
+      retailPrice: product.price || 0,
+      wholesalePrice: product.wholesalePrice || 0,
+    });
     setCustomNote("");
     setEggCount(0);
     setSelectedVariant(null);
+    setPriceTier("retail");
     setMigaOptionModal(true);
   };
 
   const handleVarietyClick = (variety, presentationName) => {
     if (isRegisterClosed) return;
 
-    if (isUnitSaleVariety(variety.name)) {
+    if (isUnitSaleVariety(variety)) {
       openUnitSaleModal(variety);
       return;
     }
@@ -179,8 +281,10 @@ export function EmployeePos() {
 
   const handleConfirmMigaOption = (option) => {
     if (pendingMigaProduct) {
+      const tierLabel = priceTier === "wholesale" ? "Mayorista" : "Minorista";
       let finalName = option ? `${pendingMigaProduct.name} (${option})` : pendingMigaProduct.name;
-      let finalPrice = pendingMigaProduct.price || 0;
+      let finalPrice = getPresentationPrice(pendingMigaProduct, priceTier);
+      finalName += ` [${tierLabel}]`;
       
       if (eggCount > 0) {
         const eggInput = inputs.find((i) => i.name.toLowerCase().includes("huevo"));
@@ -189,26 +293,55 @@ export function EmployeePos() {
         finalName += ` + ${eggCount} Huevo${eggCount > 1 ? "s" : ""}`;
       }
       
-      const finalId = option ? `${pendingMigaProduct.id}-${option}-e${eggCount}` : `${pendingMigaProduct.id}-e${eggCount}`;
+      const finalId = option
+        ? `${pendingMigaProduct.id}-${option}-e${eggCount}-${priceTier}`
+        : `${pendingMigaProduct.id}-e${eggCount}-${priceTier}`;
       addToCart({ ...pendingMigaProduct, name: finalName, id: finalId, price: finalPrice });
     }
     setMigaOptionModal(false);
     setPendingMigaProduct(null);
+    setPriceTier("retail");
   };
 
   const addUnitToCart = () => {
     if (!unitSaleModal || unitQuantity <= 0) return;
-    const { name, unitPrice } = unitSaleModal;
-    const cartId = `unit-${unitSaleModal.id}`;
+    const { name } = unitSaleModal;
+    const unitPrice = getUnitSalePrice(unitSaleModal, priceTier);
+    if (unitPrice <= 0) return;
+    const tierLabel = priceTier === "wholesale" ? "Mayorista" : "Minorista";
+    const cartId = `unit-${unitSaleModal.id}-${priceTier}`;
     const item = {
       id: cartId,
-      name: `${name} (Unidad)`,
+      name: `${name} (Unidad - ${tierLabel})`,
       price: unitPrice,
-      quantity: 1, // La cantidad se maneja en el wrapper addToCart
+      quantity: 1,
     };
-    // Usamos el mismo addToCart, pero con la cantidad deseada
-    setCart(current => [...current, { ...item, quantity: unitQuantity }]);
+    setCart((current) => [...current, { ...item, quantity: unitQuantity }]);
     setUnitSaleModal(null);
+    setPriceTier("retail");
+  };
+
+  const openOtherProductModal = (product) => {
+    if (isRegisterClosed || !product) return;
+    setOtherProductQuantity(1);
+    setPriceTier("retail");
+    setOtherProductModal(product);
+  };
+
+  const addOtherProductToCart = () => {
+    if (!otherProductModal || otherProductQuantity <= 0) return;
+    const unitPrice = getUnitProductPrice(otherProductModal, priceTier);
+    if (unitPrice <= 0) return;
+    const tierLabel = priceTier === "wholesale" ? "Mayorista" : "Minorista";
+    const cartId = `other-${otherProductModal.id}-${priceTier}`;
+    setCart((current) => [...current, {
+      id: cartId,
+      name: `${otherProductModal.name} [${tierLabel}]`,
+      price: unitPrice,
+      quantity: otherProductQuantity,
+    }]);
+    setOtherProductModal(null);
+    setPriceTier("retail");
   };
 
 
@@ -224,7 +357,11 @@ export function EmployeePos() {
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const currentSubtotal = payingOrder ? payingOrder.total : cartSubtotal;
   const orderAdvanceAmount = payingOrder?.advanceAmount || 0;
+  const parsedDiscountPercent = Math.min(100, Math.max(0, nonNegative(discountPercent)));
   const {
+    orderTotal,
+    discountAmount,
+    subtotal,
     surchargePercent,
     surchargeAmount,
     total,
@@ -233,7 +370,8 @@ export function EmployeePos() {
     currentSubtotal,
     orderAdvanceAmount,
     payments[0]?.method,
-    availablePayments
+    availablePayments,
+    parsedDiscountPercent
   );
   const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   const remaining = amountDue - totalPaid;
@@ -246,7 +384,8 @@ export function EmployeePos() {
         value,
         payingOrder.total,
         orderAdvanceAmount,
-        availablePayments
+        availablePayments,
+        parsedDiscountPercent
       ));
       return;
     }
@@ -255,6 +394,20 @@ export function EmployeePos() {
     const safeValue = field === "amount" ? nonNegative(value) : value;
     newPayments[index] = { ...newPayments[index], [field]: safeValue };
     setPayments(newPayments);
+  };
+
+  const handleDiscountChange = (value) => {
+    if (!isAllowedDecimalInput(value)) return;
+    setDiscountPercent(value);
+    if (!payingOrder) return;
+    const nextDiscount = Math.min(100, Math.max(0, nonNegative(value === "" ? 0 : value)));
+    setPayments(applyDiscountChange(
+      payments,
+      payingOrder.total,
+      orderAdvanceAmount,
+      availablePayments,
+      nextDiscount
+    ));
   };
 
   const handleLoadOrder = async () => {
@@ -295,7 +448,8 @@ export function EmployeePos() {
       keepInPrep: keepInPrep
     };
     setPayingOrder(newOrder);
-    setPayments(buildInitialPayments(newOrder.total, newOrder.advanceAmount || 0, availablePayments));
+    setDiscountPercent("0");
+    setPayments(buildInitialPayments(newOrder.total, newOrder.advanceAmount || 0, availablePayments, 0));
     setModalState("payment");
   };
 
@@ -323,14 +477,15 @@ export function EmployeePos() {
 
   const handleOpenPayment = (order) => {
     setPayingOrder(order);
-    setPayments(buildInitialPayments(order.total, order.advanceAmount || 0, availablePayments));
+    setDiscountPercent("0");
+    setPayments(buildInitialPayments(order.total, order.advanceAmount || 0, availablePayments, 0));
     setModalState("payment");
   };
 
   const handleRegisterSale = async () => {
     if (!payingOrder || isRegisterClosed) return;
     if (totalPaid < amountDue) {
-      alert(`Falta pagar $${remaining.toFixed(2)}`);
+      alert(`Falta pagar ${formatMoney(remaining)}`);
       return;
     }
     
@@ -338,8 +493,20 @@ export function EmployeePos() {
     if (payingOrder.advanceAmount > 0) {
       finalPayments.unshift({ method: "Seña", amount: payingOrder.advanceAmount });
     }
-    const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} ($${p.amount})`).join(" + ");
-    const newSale = { id: payingOrder.id, date: new Date().toISOString(), items: [...payingOrder.items], total, paymentMethod: paymentMethodStr, payments: finalPayments, employee: userName, registerNumber: "Caja 01" };
+    const paymentMethodStr = finalPayments.length === 1 ? finalPayments[0].method : finalPayments.map((p) => `${p.method} (${formatMoney(p.amount)})`).join(" + ");
+    const newSale = {
+      id: payingOrder.id,
+      date: new Date().toISOString(),
+      items: [...payingOrder.items],
+      subtotalBeforeDiscount: orderTotal,
+      discountPercent: parsedDiscountPercent,
+      discountAmount,
+      total,
+      paymentMethod: paymentMethodStr,
+      payments: finalPayments,
+      employee: userName,
+      registerNumber: "Caja 01",
+    };
     try {
       await appendSale(newSale);
       setLastSale(newSale);
@@ -368,6 +535,7 @@ export function EmployeePos() {
 
     setModalState("success");
     setPayingOrder(null);
+    setDiscountPercent("0");
     setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
     } catch (err) {
       alert(err.message || "Error al registrar la venta. Revisa la conexión.");
@@ -403,7 +571,7 @@ export function EmployeePos() {
   };
 
   const handleCloseRegister = async () => {
-    if (!registerState) return;
+    if (!registerState?.isOpen) return;
     try {
       await closeRegister({ employee: userName, closedBy: userName });
       await refreshPosStore();
@@ -418,23 +586,28 @@ export function EmployeePos() {
       <div className="flex flex-wrap items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div>
           <h1 className="text-xl font-bold text-gray-900 capitalize">{currentDate}</h1>
-          <p className={`text-sm ${isRegisterClosed ? "text-red-600 font-medium" : "text-gray-500"}`}>
+          <p className={`text-sm ${isRegisterClosed ? "text-brand-1 font-medium" : "text-gray-500"}`}>
             Caja {isRegisterClosed ? "Cerrada" : "Abierta"}: #01 • {userName}
           </p>
-          {registerState?.isOpen && <p className="text-xs text-gray-400 mt-1">Monto inicial: ${registerState.initialCash}</p>}
+          {registerState?.isOpen && <p className="text-xs text-gray-400 mt-1">Monto inicial: {formatMoney(registerState.initialCash)}</p>}
+          {!registerState?.isOpen && lastClosure && (
+            <p className="text-xs text-brand-1 mt-1 font-medium">
+              Efectivo a corroborar: {formatMoney(lastClosure.expectedCash)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${isRegisterClosed ? "bg-red-500" : "bg-green-500 animate-pulse"}`}></div>
-            <span className={`text-sm font-medium ${isRegisterClosed ? "text-red-700" : "text-green-700"}`}>{isRegisterClosed ? "Caja Cerrada" : "Operando"}</span>
+            <div className={`w-3 h-3 rounded-full ${isRegisterClosed ? "bg-brand-1" : "bg-green-500 animate-pulse"}`}></div>
+            <span className={`text-sm font-medium ${isRegisterClosed ? "text-brand-1-dark" : "text-green-700"}`}>{isRegisterClosed ? "Caja Cerrada" : "Operando"}</span>
           </div>
           {registerState?.isOpen && (
-            <button onClick={() => setModalState("expense")} className="flex items-center gap-2 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600">
+            <button onClick={() => setModalState("expense")} className="flex items-center gap-2 px-3 py-1.5 bg-brand-1 text-white rounded-lg text-sm font-medium hover:bg-brand-1-dark">
               <TrendingDown size={14} /> Compras / Gastos
             </button>
           )}
           {registerState?.isOpen ? (
-            <button onClick={() => setModalState("closeRegister")} className="flex items-center gap-2 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600">
+            <button onClick={() => setModalState("closeRegister")} className="flex items-center gap-2 px-3 py-1.5 bg-brand-1 text-white rounded-lg text-sm font-medium hover:bg-brand-1-dark">
               <Lock size={14} /> Cerrar Caja
             </button>
           ) : (
@@ -445,46 +618,68 @@ export function EmployeePos() {
         </div>
       </div>
 
+      {!registerState?.isOpen && lastClosure && (
+        <RegisterCashSummary
+          summary={lastClosure}
+          title="Arqueo del último cierre — corroborá el efectivo en caja"
+        />
+      )}
+
+      {registerState?.isOpen && liveCashSummary && (
+        <RegisterCashSummary
+          summary={liveCashSummary}
+          title="Efectivo esperado en caja (turno en curso)"
+          compact
+        />
+      )}
+
       <div className="flex flex-col lg:flex-row gap-6 h-[65vh] min-h-[500px]">
         <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
           <div className="p-4 border-b border-gray-200 bg-white">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input type="text" placeholder="Buscar producto..." className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} disabled={isRegisterClosed} />
+              <input type="text" placeholder="Buscar producto..." className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-2" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} disabled={isRegisterClosed} />
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
             {filteredMiga.length > 0 && (
               <div className="mb-8">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2"><LayoutGrid className="text-blue-600" size={20} /> Cuadro de {migaTitle}</h3>
-                <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm">
-                  <table className="w-full text-left border-collapse bg-white">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
+                  <LayoutGrid className="text-brand-1" size={20} /> Cuadro de {migaTitle}
+                </h3>
+                <div className="overflow-x-auto border border-brand-surface-border rounded-xl shadow-lg bg-brand-surface">
+                  <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="px-4 py-3 text-sm font-bold text-gray-700 border-r border-gray-200">Variedad</th>
-                        {migaHeaders.map((header) => <th key={header} className="px-4 py-3 text-sm font-bold text-gray-700 text-center border-r border-gray-200">{header}</th>)}
+                      <tr className="bg-brand-surface-alt border-b border-brand-surface-border">
+                        <th className="px-4 py-3 text-sm font-bold text-brand-4 border-r border-brand-surface-border">Variedad</th>
+                        {migaHeaders.map((header) => (
+                          <th key={header} className="px-4 py-3 text-sm font-bold text-brand-4 text-center border-r border-brand-surface-border">
+                            {header}
+                          </th>
+                        ))}
                         {hasUnitSaleVarieties && (
-                          <th className="px-4 py-3 text-sm font-bold text-gray-700 text-center">Unidad</th>
+                          <th className="px-4 py-3 text-sm font-bold text-brand-3 text-center">Unidad</th>
                         )}
                       </tr>
-                      {/* El thead se genera dinámicamente en el componente que no está aquí */}
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <tbody className="divide-y divide-brand-surface-border">
                       {filteredMiga.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-blue-50/30">
-                          <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-200 bg-gray-50/50">{row.variety}</td>
+                        <tr key={idx} className="hover:bg-brand-surface-alt/80 transition-colors">
+                          <td className="px-4 py-3 font-bold text-brand-4 border-r border-brand-surface-border bg-brand-surface-alt/60 whitespace-nowrap">
+                            {row.variety}
+                          </td>
                           {migaHeaders.map((pres) => {
                             const product = row.presentations[pres];
-                            if (!product) return <td key={pres} className="px-2 py-2 border-r border-gray-200"></td>;
+                            if (!product) return <td key={pres} className="px-2 py-2 border-r border-brand-surface-border bg-brand-surface" />;
                             const fullVariety = migaMatrix.find(m => m.variety === row.variety)?.varietyData;
 
                             return (
-                              <td key={pres} className="px-2 py-2 border-r border-gray-200 align-middle">
+                              <td key={pres} className="px-2 py-2 border-r border-brand-surface-border align-middle bg-brand-surface">
                                 <button
                                   onClick={() => {
                                     if (isRegisterClosed) return;
-                                    if (fullVariety && isUnitSaleVariety(fullVariety.name)) {
+                                    if (fullVariety && isUnitSaleVariety(fullVariety)) {
                                       openPresentationOptions(fullVariety, pres);
                                     } else if (fullVariety) {
                                       handleVarietyClick(fullVariety, pres);
@@ -497,26 +692,32 @@ export function EmployeePos() {
                                     }
                                   }}
                                   disabled={isRegisterClosed}
-                                  className="w-full h-full flex flex-col items-center justify-center py-2 px-1 rounded-lg hover:bg-white hover:shadow-sm border border-transparent hover:border-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                                  className="w-full h-full flex flex-col items-center justify-center py-2.5 px-1 rounded-lg border border-brand-surface-border bg-brand-surface-alt/50 hover:bg-brand-1/25 hover:border-brand-3/70 hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
                                 >
-                                  <span className="text-blue-600 font-black text-base group-hover:scale-110 transition-transform">${product.price}</span>
-                                  <span className="text-[10px] text-gray-400 font-semibold uppercase mt-1 tracking-wider">Agregar</span>
+                                  <span className="text-brand-3 font-black text-lg group-hover:scale-105 transition-transform">
+                                    {formatMoney(product.price)}
+                                  </span>
+                                  <span className="text-[10px] text-brand-4/70 font-semibold uppercase mt-1 tracking-wider group-hover:text-brand-4">
+                                    Agregar
+                                  </span>
                                 </button>
                               </td>
                             );
                           })}
                           {hasUnitSaleVarieties && (
-                            <td className="px-2 py-2 align-middle">
-                              {isUnitSaleVariety(row.variety) ? (
+                            <td className="px-2 py-2 align-middle bg-brand-surface">
+                              {isUnitSaleVariety(migaMatrix.find(m => m.variety === row.variety)?.varietyData || row.variety) ? (
                                 <button
                                   onClick={() => openUnitSaleModal(migaMatrix.find(m => m.variety === row.variety)?.varietyData)}
                                   disabled={isRegisterClosed}
-                                  className="w-full h-full flex flex-col items-center justify-center py-2 px-1 rounded-lg hover:bg-green-50 hover:shadow-sm border border-green-200 bg-green-50/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                                  className="w-full h-full flex flex-col items-center justify-center py-2.5 px-1 rounded-lg border border-brand-1/40 bg-brand-1/10 hover:bg-brand-1/20 hover:border-brand-2/70 hover:shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
                                 >
-                                  <span className="text-green-700 font-black text-base group-hover:scale-110 transition-transform">
-                                    ${(migaMatrix.find(m => m.variety === row.variety)?.varietyData?.unitPrice || 0).toFixed(2)}
+                                  <span className="text-brand-2 font-black text-lg group-hover:scale-105 transition-transform">
+                                    {formatMoney(migaMatrix.find(m => m.variety === row.variety)?.varietyData?.unitPrice || 0)}
                                   </span>
-                                  <span className="text-[10px] text-green-600 font-semibold uppercase mt-1 tracking-wider">1 Unidad</span>
+                                  <span className="text-[10px] text-brand-3 font-semibold uppercase mt-1 tracking-wider group-hover:text-brand-4">
+                                    1 Unidad
+                                  </span>
                                 </button>
                               ) : null}
                             </td>
@@ -529,25 +730,55 @@ export function EmployeePos() {
               </div>
             )}
 
-            {filteredOther.length > 0 && (
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2"><Tag className="text-orange-500" size={20} /> Otros Productos</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {filteredOther.map((product) => (
-                    <button key={product.id} onClick={() => !isRegisterClosed && addToCart(product)} disabled={isRegisterClosed} className="flex flex-col text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-orange-400 hover:shadow-md transition-all group disabled:opacity-50">
-                      <span className="font-medium text-gray-900 group-hover:text-orange-600 line-clamp-2">{product.name}</span>
-                      <span className="mt-2 text-orange-500 font-bold">${product.price}</span>
+            {filteredPromotions.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
+                  <Gift className="text-brand-1" size={20} /> Promociones
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredPromotions.map((promo) => (
+                    <button
+                      key={promo.id}
+                      onClick={() => addPromotionToCart(promo)}
+                      disabled={isRegisterClosed || promo.price <= 0}
+                      className="flex flex-col text-left p-4 rounded-xl border-2 border-brand-2/30 bg-brand-4/40 hover:border-brand-2 hover:shadow-md transition-all group disabled:opacity-50"
+                    >
+                      <span className="font-bold text-gray-900 group-hover:text-brand-1-dark">{promo.name}</span>
+                      <span className="text-xs text-gray-600 mt-1 line-clamp-2">{getPromotionSummaryLabel(promo)}</span>
+                      <span className="mt-3 text-brand-1 font-black text-lg">{formatMoney(promo.price)}</span>
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {filteredMiga.length === 0 && filteredOther.length === 0 && (
+            {filteredOther.length > 0 && (
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4 px-1 flex items-center gap-2"><Tag className="text-brand-3-dark" size={20} /> Otros Productos</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {filteredOther.map((product) => (
+                    <button
+                      key={product.id}
+                      onClick={() => openOtherProductModal(product)}
+                      disabled={isRegisterClosed || product.price <= 0}
+                      className="flex flex-col text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-brand-3 hover:shadow-md transition-all group disabled:opacity-50"
+                    >
+                      <span className="font-medium text-gray-900 group-hover:text-brand-1 line-clamp-2">{product.name}</span>
+                      <span className="mt-2 text-brand-3-dark font-bold">{formatMoney(product.price)}</span>
+                      {product.wholesalePrice > 0 && (
+                        <span className="text-xs text-brand-2-dark font-medium mt-1">Mayor: {formatMoney(product.wholesalePrice)}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredMiga.length === 0 && filteredOther.length === 0 && filteredPromotions.length === 0 && (
               <div className="py-16 flex flex-col items-center justify-center text-gray-400">
                 <LayoutGrid className="w-16 h-16 mb-4 text-gray-300" />
                 <p className="text-lg font-bold text-gray-500">No hay productos en tu catálogo</p>
-                <p className="text-sm mt-2 text-center max-w-sm">Ve a <span className="font-medium text-gray-700">Configuración</span> y haz clic en "Guardar Catálogo" para que aparezcan aquí.</p>
+                <p className="text-sm mt-2 text-center max-w-sm">Ve a <span className="font-medium text-gray-700">Configuración</span>, cargá el catálogo de miga u otros productos, y guardá los cambios.</p>
               </div>
             )}
           </div>
@@ -555,7 +786,7 @@ export function EmployeePos() {
           {isRegisterClosed && (
             <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-[2px] flex items-center justify-center z-10">
               <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-3">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center"><Lock className="w-8 h-8 text-red-600" /></div>
+                <div className="w-16 h-16 bg-brand-1/15 rounded-full flex items-center justify-center"><Lock className="w-8 h-8 text-brand-1" /></div>
                 <p className="text-gray-900 font-bold text-lg">Caja Cerrada</p>
                 <p className="text-gray-500 text-sm text-center">No se pueden registrar ventas</p>
               </div>
@@ -568,9 +799,9 @@ export function EmployeePos() {
             <h2 className="text-lg font-bold text-gray-900 flex items-center"><Receipt className="w-5 h-5 mr-2 text-gray-500" /> Venta Actual</h2>
             <div className="flex gap-2 items-center">
               {cart.length > 0 && (
-                <button onClick={() => { if (confirm("¿Vaciar el carrito?")) { setCart([]); setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]); } }} className="text-xs font-medium px-2.5 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">Vaciar</button>
+                <button onClick={() => { if (confirm("¿Vaciar el carrito?")) { setCart([]); setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]); } }} className="text-xs font-medium px-2.5 py-1 bg-brand-1/15 text-brand-1-dark rounded-full hover:bg-brand-1/20">Vaciar</button>
               )}
-              <span className="text-sm font-medium px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">{cart.reduce((sum, item) => sum + item.quantity, 0)} items</span>
+              <span className="text-sm font-medium px-2.5 py-1 bg-brand-4 text-brand-1 rounded-full">{cart.reduce((sum, item) => sum + item.quantity, 0)} items</span>
             </div>
           </div>
 
@@ -583,10 +814,10 @@ export function EmployeePos() {
                   <div key={item.id} className="flex flex-col gap-2 p-3 border border-gray-100 bg-gray-50/50 rounded-lg">
                     <div className="flex justify-between items-start">
                       <span className="font-medium text-gray-900 line-clamp-1">{item.name}</span>
-                      <button onClick={() => setCart((c) => c.filter((i) => i.id !== item.id))} className="text-gray-400 hover:text-red-500 p-1"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => setCart((c) => c.filter((i) => i.id !== item.id))} className="text-gray-400 hover:text-brand-1 p-1"><Trash2 className="w-4 h-4" /></button>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600 font-medium">${item.price}</span>
+                      <span className="text-gray-600 font-medium">{formatMoney(item.price)}</span>
                       <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
                         <button onClick={() => updateQuantity(item.id, -1)} className="px-2 py-1 hover:bg-gray-100 text-gray-600"><Minus className="w-4 h-4" /></button>
                         <input type="number" min="1" value={item.quantity} onChange={(e) => { const qty = parseInt(e.target.value, 10); if (e.target.value !== "" && (Number.isNaN(qty) || qty < 0)) return; setQuantity(item.id, qty || 1); }} className="w-12 text-center font-medium text-sm border-0 focus:ring-0 focus:outline-none" />
@@ -604,7 +835,7 @@ export function EmployeePos() {
               <input
                 type="text"
                 placeholder="Nombre Cliente (Opcional)"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-orange-500 bg-white"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-brand-3 bg-white"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 disabled={isRegisterClosed || cart.length === 0}
@@ -632,7 +863,7 @@ export function EmployeePos() {
             </div>
             <div className="flex justify-between items-center mb-4">
               <span className="text-gray-900 font-medium text-lg">Total del Pedido</span>
-              <span className="text-3xl font-bold text-blue-600">${cartSubtotal.toFixed(2)}</span>
+              <span className="text-3xl font-bold text-brand-1">{formatMoney(cartSubtotal)}</span>
             </div>
             
             <div className="flex flex-col gap-2">
@@ -640,11 +871,11 @@ export function EmployeePos() {
                 <Receipt size={18} /> Cobrar (Entrega Inmediata)
               </button>
               <div className="flex gap-2">
-                <button onClick={handleLoadOrder} disabled={cart.length === 0 || isRegisterClosed} className={`flex-1 py-2 px-2 rounded-xl font-bold transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-sm flex flex-col justify-center items-center gap-1"}`}>
+                <button onClick={handleLoadOrder} disabled={cart.length === 0 || isRegisterClosed} className={`flex-1 py-2 px-2 rounded-xl font-bold transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-brand-4 text-brand-1-dark hover:bg-brand-4-dark/50 shadow-sm flex flex-col justify-center items-center gap-1"}`}>
                   <Clock size={18} />
                   <span className="text-xs text-center leading-tight">Cargar<br/>Orden</span>
                 </button>
-                <button onClick={() => handleDirectCharge(true)} disabled={cart.length === 0 || isRegisterClosed} className={`flex-1 py-2 px-2 rounded-xl font-bold text-white transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-300 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600 shadow-sm flex flex-col justify-center items-center gap-1"}`}>
+                <button onClick={() => handleDirectCharge(true)} disabled={cart.length === 0 || isRegisterClosed} className={`flex-1 py-2 px-2 rounded-xl font-bold text-white transition-colors ${cart.length === 0 || isRegisterClosed ? "bg-gray-300 cursor-not-allowed" : "bg-brand-1 hover:bg-brand-1-dark shadow-sm flex flex-col justify-center items-center gap-1"}`}>
                   <CreditCard size={18} />
                   <span className="text-xs text-center leading-tight">Cobrar y<br/>Preparar</span>
                 </button>
@@ -655,7 +886,7 @@ export function EmployeePos() {
           {isRegisterClosed && (
             <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-[2px] flex items-center justify-center z-10">
               <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-3">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center"><Lock className="w-8 h-8 text-red-600" /></div>
+                <div className="w-16 h-16 bg-brand-1/15 rounded-full flex items-center justify-center"><Lock className="w-8 h-8 text-brand-1" /></div>
                 <p className="text-gray-900 font-bold text-lg">Caja Cerrada</p>
                 <p className="text-gray-500 text-sm text-center">No se pueden registrar ventas</p>
               </div>
@@ -667,7 +898,7 @@ export function EmployeePos() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-shrink-0">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Clock className="w-6 h-6 text-orange-500" /> Pedidos en Preparación ({pendingOrders.length})
+            <Clock className="w-6 h-6 text-brand-3-dark" /> Pedidos en Preparación ({pendingOrders.length})
           </h2>
         </div>
         {pendingOrders.length === 0 ? (
@@ -677,12 +908,12 @@ export function EmployeePos() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {pendingOrders.map(order => (
-              <div key={order.id} className="border border-orange-200 bg-orange-50/30 rounded-xl p-4 flex flex-col h-64">
-                <div className="flex justify-between items-start mb-3 border-b border-orange-100 pb-3">
+              <div key={order.id} className="border border-brand-3/40 bg-brand-4/30 rounded-xl p-4 flex flex-col h-64">
+                <div className="flex justify-between items-start mb-3 border-b border-brand-3/30 pb-3">
                   <div>
                     <span className="font-bold text-gray-900">Orden #{order.id.toUpperCase()}</span>
                     {order.customerName && (
-                      <p className="font-bold text-orange-600 text-sm mt-0.5">{order.customerName}</p>
+                      <p className="font-bold text-brand-1 text-sm mt-0.5">{order.customerName}</p>
                     )}
                     {order.isPaid && (
                       <p className="inline-block mt-1 px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded shadow-sm mr-1">
@@ -695,13 +926,13 @@ export function EmployeePos() {
                       </p>
                     )}
                     {order.advanceAmount > 0 && (
-                      <p className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-bold rounded border border-blue-200">
-                        Seña: ${order.advanceAmount}
+                      <p className="inline-block mt-1 px-2 py-0.5 bg-brand-4 text-brand-1 text-xs font-bold rounded border border-brand-3/60">
+                        Seña: {formatMoney(order.advanceAmount)}
                       </p>
                     )}
                     <p className="text-xs text-gray-500 mt-1">{new Date(order.date).toLocaleTimeString("es-AR", {hour12: false})}</p>
                   </div>
-                  <span className="font-bold text-blue-700">${order.total.toFixed(2)}</span>
+                  <span className="font-bold text-brand-1">{formatMoney(order.total)}</span>
                 </div>
                 <ul className="flex-1 space-y-1 mb-4 overflow-y-auto pr-1">
                   {order.items.map(item => (
@@ -712,10 +943,10 @@ export function EmployeePos() {
                 </ul>
                 <div className="flex gap-2 mt-auto">
                   {order.isPaid ? (
-                    <button onClick={() => handleDeliverOrder(order.id)} className="flex-1 bg-blue-500 text-white rounded-lg text-sm font-bold hover:bg-blue-600 py-2">Entregado / Retirar</button>
+                    <button onClick={() => handleDeliverOrder(order.id)} className="flex-1 bg-brand-40 text-white rounded-lg text-sm font-bold hover:bg-brand-1-dark py-2">Entregado / Retirar</button>
                   ) : (
                     <>
-                      <button onClick={() => handleDiscardOrder(order.id)} className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50">Descartar</button>
+                      <button onClick={() => handleDiscardOrder(order.id)} className="px-3 py-2 bg-white border border-brand-1/25 text-brand-1 rounded-lg text-sm font-medium hover:bg-brand-1/10">Descartar</button>
                       <button onClick={() => handleOpenPayment(order)} className="flex-1 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600">Cobrar y Registrar</button>
                     </>
                   )}
@@ -744,10 +975,10 @@ export function EmployeePos() {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="bg-gray-50 border-b p-4 flex justify-between items-center"><h3 className="font-bold text-gray-900">Registrar Compra / Gasto</h3><button onClick={() => { setModalState("none"); setExpenseDesc(""); setExpenseAmount(""); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button></div>
             <div className="p-6 space-y-4">
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label><input type="text" value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="Descripción del gasto" autoFocus /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Monto Retirado de Caja</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span><input type="text" inputMode="decimal" value={expenseAmount} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setExpenseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="0.00" /></div></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label><input type="text" value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-3" placeholder="Descripción del gasto" autoFocus /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Monto Retirado de Caja</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span><input type="text" inputMode="decimal" value={expenseAmount} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setExpenseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-3" placeholder="0.00" /></div></div>
             </div>
-            <div className="p-4 border-t bg-gray-50 flex gap-3"><button onClick={() => { setModalState("none"); setExpenseDesc(""); setExpenseAmount(""); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button><button onClick={handleRegisterExpense} className="flex-1 bg-orange-500 text-white py-2.5 rounded-lg font-medium hover:bg-orange-600">Registrar Gasto</button></div>
+            <div className="p-4 border-t bg-gray-50 flex gap-3"><button onClick={() => { setModalState("none"); setExpenseDesc(""); setExpenseAmount(""); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button><button onClick={handleRegisterExpense} className="flex-1 bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Registrar Gasto</button></div>
           </div>
         </div>
       )}
@@ -761,13 +992,13 @@ export function EmployeePos() {
             </div>
             <div className="p-6">
               {pendingOrders.length > 0 && (
-                <div className="mb-5 bg-red-50 border border-red-300 rounded-xl p-4 flex gap-3 items-start">
-                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
-                    <Lock className="w-4 h-4 text-red-600" />
+                <div className="mb-5 bg-brand-1/10 border border-brand-1/30 rounded-xl p-4 flex gap-3 items-start">
+                  <div className="w-8 h-8 bg-brand-1/15 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                    <Lock className="w-4 h-4 text-brand-1" />
                   </div>
                   <div>
-                    <p className="font-bold text-red-700 text-sm">No se puede cerrar la caja</p>
-                    <p className="text-red-600 text-sm mt-1">
+                    <p className="font-bold text-brand-1-dark text-sm">No se puede cerrar la caja</p>
+                    <p className="text-brand-1 text-sm mt-1">
                       Hay <strong>{pendingOrders.length} pedido{pendingOrders.length > 1 ? "s" : ""} en preparación</strong> sin resolver.
                       Entregá o descartá todos los pedidos antes de cerrar la caja.
                     </p>
@@ -775,19 +1006,15 @@ export function EmployeePos() {
                 </div>
               )}
               <div className="flex flex-col items-center mb-6">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 ${pendingOrders.length > 0 ? "bg-gray-100 text-gray-400" : "bg-red-100 text-red-600"}`}>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 ${pendingOrders.length > 0 ? "bg-gray-100 text-gray-400" : "bg-brand-1/15 text-brand-1"}`}>
                   <Lock size={32} />
                 </div>
                 <h4 className="text-xl font-bold text-gray-900 mb-2">¿Cerrar la caja?</h4>
-                <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Monto inicial:</span><span className="font-medium">${registerState?.initialCash || 0}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ventas:</span><span className="font-medium">{sales.length}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Ingresos:</span><span className="font-medium text-green-600">${totalSalesToday}</span></div>
-                  <div className="flex justify-between text-sm border-b border-blue-200 pb-2"><span className="text-gray-600">Gastos:</span><span className="font-medium text-red-600">-${totalExpensesToday}</span></div>
-                  <div className="flex justify-between font-bold text-sm"><span>Total en Caja:</span><span className="text-blue-700">${(registerState?.initialCash || 0) + totalSalesToday - totalExpensesToday}</span></div>
+                <div className="w-full">
+                  <RegisterCashSummary summary={liveCashSummary} title={null} compact />
                 </div>
                 {pendingOrders.length === 0 && (
-                  <p className="text-red-600 font-medium text-sm mt-4">⚠️ Esta acción no se puede deshacer</p>
+                  <p className="text-brand-1 font-medium text-sm mt-4">⚠️ Esta acción no se puede deshacer</p>
                 )}
               </div>
             </div>
@@ -801,7 +1028,7 @@ export function EmployeePos() {
                 className={`flex-1 py-2.5 rounded-lg font-medium transition-colors ${
                   pendingOrders.length > 0
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-brand-1 text-white hover:bg-brand-1-dark"
                 }`}
               >
                 Cerrar Caja
@@ -814,8 +1041,13 @@ export function EmployeePos() {
       {modalState === "closeSuccess" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-6 flex flex-col items-center"><div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3"><CheckCircle2 size={32} /></div><h4 className="text-xl font-bold text-gray-900 mb-2">¡Caja Cerrada Exitosamente!</h4><p className="text-gray-600 text-center">El cierre ha sido registrado.</p></div>
-            <div className="p-4 border-t bg-gray-50"><button onClick={() => setModalState("none")} className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700">Entendido</button></div>
+            <div className="p-6 flex flex-col items-center">
+              <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3"><CheckCircle2 size={32} /></div>
+              <h4 className="text-xl font-bold text-gray-900 mb-2">¡Caja Cerrada Exitosamente!</h4>
+              <p className="text-gray-600 text-center mb-4">Contá el efectivo en caja y comparalo con este monto:</p>
+              {lastClosure && <RegisterCashSummary summary={lastClosure} title={null} compact />}
+            </div>
+            <div className="p-4 border-t bg-gray-50"><button onClick={() => setModalState("none")} className="w-full bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Entendido</button></div>
           </div>
         </div>
       )}
@@ -832,17 +1064,23 @@ export function EmployeePos() {
                 <div className="flex flex-col items-center mb-6"><div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3"><CheckCircle2 size={32} /></div><h4 className="text-xl font-bold text-gray-900">¡Venta Exitosa!</h4><p className="text-gray-500">El pago ha sido procesado correctamente.</p></div>
                 <div className="space-y-4">
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
-                    <div className="flex justify-between"><span className="text-gray-500 flex items-center gap-2"><Receipt size={16} /> Ticket</span><span className="font-medium uppercase text-blue-600">#{lastSale.id}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Monto Total</span><span className="font-bold">${lastSale.total}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500 flex items-center gap-2"><Receipt size={16} /> Ticket</span><span className="font-medium uppercase text-brand-1">#{lastSale.id}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Monto Total</span><span className="font-bold">{formatMoney(lastSale.total)}</span></div>
+                    {(lastSale.discountPercent || 0) > 0 && (
+                      <div className="flex justify-between text-sm text-brand-2-dark">
+                        <span>Descuento ({lastSale.discountPercent}%)</span>
+                        <span className="font-medium">{formatMoneyDebit(lastSale.discountAmount || 0)}</span>
+                      </div>
+                    )}
                     <div className="border-t pt-3">
                       <span className="text-gray-500 text-sm block mb-2">Forma(s) de Pago</span>
-                      {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between text-sm"><span>{p.method}</span><span className="font-medium">${p.amount.toFixed(2)}</span></div>) : <div className="flex justify-between"><span>{lastSale.paymentMethod}</span></div>}
+                      {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between text-sm"><span>{p.method}</span><span className="font-medium">{formatMoney(p.amount)}</span></div>) : <div className="flex justify-between"><span>{lastSale.paymentMethod}</span></div>}
                     </div>
                   </div>
                   <div>
                     <h5 className="font-medium text-gray-900 mb-2">Productos Incluidos</h5>
                     <div className="border border-gray-200 rounded-lg divide-y max-h-32 overflow-y-auto">
-                      {lastSale.items.map((item) => <div key={item.id} className="p-3 flex justify-between text-sm"><span>{item.quantity}x {item.name}</span><span className="font-medium">${item.price * item.quantity}</span></div>)}
+                      {lastSale.items.map((item) => <div key={item.id} className="p-3 flex justify-between text-sm"><span>{item.quantity}x {item.name}</span><span className="font-medium">{formatMoney(item.price * item.quantity)}</span></div>)}
                     </div>
                   </div>
                 </div>
@@ -856,20 +1094,20 @@ export function EmployeePos() {
                   <div className="flex justify-between"><span className="text-gray-500">Ticket #:</span><span className="uppercase">{lastSale.id}</span></div>
                 </div>
                 <div className="space-y-3 mb-4">
-                  {lastSale.items.map((item) => <div key={item.id} className="flex justify-between text-gray-700"><div>{item.quantity}x {item.name}</div><span>${item.price * item.quantity}</span></div>)}
+                  {lastSale.items.map((item) => <div key={item.id} className="flex justify-between text-gray-700"><div>{item.quantity}x {item.name}</div><span>{formatMoney(item.price * item.quantity)}</span></div>)}
                 </div>
                 <div className="border-t pt-3">
-                  <div className="flex justify-between font-bold text-lg"><span>TOTAL</span><span>${lastSale.total}</span></div>
+                  <div className="flex justify-between font-bold text-lg"><span>TOTAL</span><span>{formatMoney(lastSale.total)}</span></div>
                   <div className="mt-3 text-xs border-t pt-2">
                     <span className="text-gray-500 block mb-1">Medio(s) de Pago:</span>
-                    {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between"><span className="uppercase">{p.method}</span><span>${p.amount.toFixed(2)}</span></div>) : <span className="uppercase">{lastSale.paymentMethod}</span>}
+                    {lastSale.payments?.length > 0 ? lastSale.payments.map((p, idx) => <div key={idx} className="flex justify-between"><span className="uppercase">{p.method}</span><span>{formatMoney(p.amount)}</span></div>) : <span className="uppercase">{lastSale.paymentMethod}</span>}
                   </div>
                 </div>
               </div>
             )}
             <div className="p-4 border-t bg-gray-50 flex gap-3">
               {modalState === "success" ? (
-                <><button onClick={() => setModalState("none")} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cerrar y Continuar</button><button onClick={() => setModalState("ticket")} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700">Ver Ticket <ChevronRight size={18} /></button></>
+                <><button onClick={() => setModalState("none")} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cerrar y Continuar</button><button onClick={() => setModalState("ticket")} className="flex-1 flex items-center justify-center gap-2 bg-brand-1 text-white py-2.5 rounded-lg font-medium hover:bg-brand-1-dark">Ver Ticket <ChevronRight size={18} /></button></>
               ) : (
                 <><button onClick={() => { alert("Imprimiendo..."); setModalState("none"); }} className="flex-1 flex items-center justify-center gap-2 bg-gray-900 text-white py-2.5 rounded-lg font-medium hover:bg-gray-800"><Printer size={18} /> Imprimir</button><button onClick={() => setModalState("success")} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Volver</button></>
               )}
@@ -883,7 +1121,7 @@ export function EmployeePos() {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-gray-50 border-b p-4 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-gray-900">Cobrar y Registrar Venta</h3>
-              <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <button onClick={() => { setModalState("none"); setPayingOrder(null); setDiscountPercent("0"); }} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="p-6 overflow-y-auto">
               {(payingOrder.advanceNote || payingOrder.advanceAmount > 0) && (
@@ -897,31 +1135,57 @@ export function EmployeePos() {
                   {payingOrder.advanceAmount > 0 && (
                     <div className="flex items-center gap-2">
                       <DollarSign className="text-green-600 w-5 h-5 flex-shrink-0" />
-                      <p className="text-sm font-bold text-green-800">Seña / Adelanto: <span className="font-medium text-green-700">${payingOrder.advanceAmount.toFixed(2)}</span></p>
+                      <p className="text-sm font-bold text-green-800">Seña / Adelanto: <span className="font-medium text-green-700">{formatMoney(payingOrder.advanceAmount)}</span></p>
                     </div>
                   )}
                 </div>
               )}
-              <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
+              <div className="mb-6 bg-brand-4 p-4 rounded-xl border border-brand-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-600 font-medium">Subtotal del Pedido</span>
-                  <span className="text-lg font-bold text-gray-900">${payingOrder.total.toFixed(2)}</span>
+                  <span className="text-lg font-bold text-gray-900">{formatMoney(orderTotal)}</span>
                 </div>
+                {parsedDiscountPercent > 0 && (
+                  <div className="flex justify-between items-center text-brand-2-dark mb-2">
+                    <span>Descuento ({parsedDiscountPercent}%)</span>
+                    <span className="font-bold">{formatMoneyDebit(discountAmount)}</span>
+                  </div>
+                )}
+                {parsedDiscountPercent > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-600 font-medium">Subtotal con descuento</span>
+                    <span className="font-bold text-gray-900">{formatMoney(subtotal)}</span>
+                  </div>
+                )}
                 {payingOrder.advanceAmount > 0 && (
                   <div className="flex justify-between items-center text-green-600 mb-2">
                     <span>Adelanto / Seña</span>
-                    <span className="font-bold">-${payingOrder.advanceAmount.toFixed(2)}</span>
+                    <span className="font-bold">{formatMoneyDebit(payingOrder.advanceAmount)}</span>
                   </div>
                 )}
                 {surchargeAmount > 0 && (
-                  <div className="flex justify-between items-center text-orange-600 mb-2">
+                  <div className="flex justify-between items-center text-brand-1 mb-2">
                     <span>Recargo ({surchargePercent}%)</span>
-                    <span className="font-bold">${surchargeAmount.toFixed(2)}</span>
+                    <span className="font-bold">{formatMoney(surchargeAmount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center pt-3 border-t border-blue-200">
+                <div className="flex justify-between items-center pt-3 border-t border-brand-3/60">
                   <span className="text-gray-900 font-bold">Total a Cobrar</span>
-                  <span className="text-2xl font-black text-blue-700">${amountDue.toFixed(2)}</span>
+                  <span className="text-2xl font-black text-brand-1">{formatMoney(amountDue)}</span>
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Descuento (%)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={discountPercent}
+                    onChange={(e) => handleDiscountChange(e.target.value)}
+                    className="w-full pr-8 pl-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-2"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
                 </div>
               </div>
               <div className="mb-4">
@@ -931,7 +1195,7 @@ export function EmployeePos() {
                     const usedMethods = payments.map((p) => p.method);
                     const nextMethod = availablePayments.find((p) => !usedMethods.includes(p.name));
                     return nextMethod ? (
-                      <button onClick={() => setPayments([...payments, { method: nextMethod.name, amount: 0 }])} className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                      <button onClick={() => setPayments([...payments, { method: nextMethod.name, amount: 0 }])} className="text-xs font-medium text-brand-1 hover:text-brand-1-dark flex items-center gap-1">
                         <Plus className="w-3 h-3" /> Agregar
                       </button>
                     ) : null;
@@ -948,7 +1212,7 @@ export function EmployeePos() {
                       </select>
                       <div className="relative flex-1">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
-                        <input type="text" inputMode="decimal" value={payment.amount || ""} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) updatePayment(index, "amount", v === "" ? 0 : v); }} className="w-full pl-5 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+                        <input type="text" inputMode="decimal" value={payment.amount || ""} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) updatePayment(index, "amount", v === "" ? 0 : v); }} className="w-full pl-5 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-2" placeholder="0.00" />
                       </div>
                       {payments.length > 1 && (
                         <button
@@ -957,9 +1221,10 @@ export function EmployeePos() {
                             index,
                             payingOrder.total,
                             orderAdvanceAmount,
-                            availablePayments
+                            availablePayments,
+                            parsedDiscountPercent
                           ))}
-                          className="p-2 text-gray-400 hover:text-red-600"
+                          className="p-2 text-gray-400 hover:text-brand-1"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -969,14 +1234,14 @@ export function EmployeePos() {
                   })}
                 </div>
                 <div className="mt-4 pt-3 border-t border-gray-200 space-y-1">
-                  <div className="flex justify-between text-sm"><span className="text-gray-600">Total ingresado:</span><span className="font-medium text-gray-900">${totalPaid.toFixed(2)}</span></div>
-                  {remaining > 0 && <div className="flex justify-between text-sm"><span className="text-red-600">Falta cobrar:</span><span className="font-bold text-red-600">${remaining.toFixed(2)}</span></div>}
-                  {remaining < 0 && <div className="flex justify-between text-sm"><span className="text-green-600">Cambio a devolver:</span><span className="font-bold text-green-600">${Math.abs(remaining).toFixed(2)}</span></div>}
+                  <div className="flex justify-between text-sm"><span className="text-gray-600">Total ingresado:</span><span className="font-medium text-gray-900">{formatMoney(totalPaid)}</span></div>
+                  {remaining > 0 && <div className="flex justify-between text-sm"><span className="text-brand-1">Falta cobrar:</span><span className="font-bold text-brand-1">{formatMoney(remaining)}</span></div>}
+                  {remaining < 0 && <div className="flex justify-between text-sm"><span className="text-green-600">Cambio a devolver:</span><span className="font-bold text-green-600">{formatMoney(Math.abs(remaining))}</span></div>}
                 </div>
               </div>
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3 shrink-0">
-              <button onClick={() => { setModalState("none"); setPayingOrder(null); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
+              <button onClick={() => { setModalState("none"); setPayingOrder(null); setDiscountPercent("0"); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
               <button onClick={handleRegisterSale} disabled={totalPaid < amountDue} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < amountDue ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
             </div>
           </div>
@@ -994,8 +1259,40 @@ export function EmployeePos() {
             <div className="p-6 overflow-y-auto flex-1">
               <p className="text-center text-gray-600 mb-4">¿Con qué acompañamiento se preparará <strong>{pendingMigaProduct.name}</strong>?</p>
 
+              {pendingMigaProduct && (
+                <div className="mb-6 bg-brand-4/70 p-4 rounded-xl border border-brand-2/20">
+                  <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Tipo de Precio</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPriceTier("retail")}
+                      className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                        priceTier === "retail"
+                          ? "bg-brand-1 text-white border-brand-1-dark shadow-sm"
+                          : "bg-white text-brand-1 border-brand-3/60 hover:bg-brand-4"
+                      }`}
+                    >
+                      Minorista
+                      <span className="block text-xs font-semibold mt-1">{formatMoney(pendingMigaProduct.retailPrice || 0)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPriceTier("wholesale")}
+                      className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                        priceTier === "wholesale"
+                          ? "bg-brand-2 text-white border-brand-2-dark shadow-sm"
+                          : "bg-white text-brand-2-dark border-brand-2/30 hover:bg-brand-4/50"
+                      }`}
+                    >
+                      Mayorista
+                      <span className="block text-xs font-semibold mt-1">{formatMoney(pendingMigaProduct.wholesalePrice || 0)}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Selección de huevo */}
-              <div className="mb-6 bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+              <div className="mb-6 bg-brand-4/50 p-4 rounded-xl border border-brand-3/30">
                 <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Agregado de Huevo</h4>
                 <div className="grid grid-cols-5 gap-2">
                   {[0, 1, 2, 3, 4].map((num) => (
@@ -1004,7 +1301,7 @@ export function EmployeePos() {
                       onClick={() => setEggCount(num)}
                       className={`py-2 px-1 font-bold rounded-lg border text-sm transition-colors ${
                         eggCount === num
-                          ? "bg-orange-500 text-white border-orange-600 shadow-sm"
+                          ? "bg-brand-1 text-white border-brand-1-dark shadow-sm"
                           : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
                       }`}
                     >
@@ -1013,12 +1310,12 @@ export function EmployeePos() {
                   ))}
                 </div>
                 {eggCount > 0 && inputs.some((i) => i.name.toLowerCase().includes("huevo")) && (
-                  <p className="text-xs text-orange-600 mt-2 font-medium text-center">
-                    + ${(inputs.find((i) => i.name.toLowerCase().includes("huevo"))?.price * eggCount).toFixed(2)} al total de esta variedad
+                  <p className="text-xs text-brand-1 mt-2 font-medium text-center">
+                    + {formatMoney((inputs.find((i) => i.name.toLowerCase().includes("huevo"))?.price || 0) * eggCount)} al total de esta variedad
                   </p>
                 )}
                 {eggCount > 0 && !inputs.some((i) => i.name.toLowerCase().includes("huevo")) && (
-                  <p className="text-xs text-red-500 mt-2 font-medium text-center">
+                  <p className="text-xs text-brand-1 mt-2 font-medium text-center">
                     ⚠️ Insumo "Huevo" no encontrado en Configuración. El precio será $0.
                   </p>
                 )}
@@ -1115,10 +1412,10 @@ export function EmployeePos() {
                             selectedVariant === opt
                               ? base === "yellow" ? "bg-yellow-400 text-yellow-900 border-yellow-500 shadow-sm"
                                 : base === "green" ? "bg-green-500 text-white border-green-600 shadow-sm"
-                                : "bg-orange-500 text-white border-orange-600 shadow-sm"
+                                : "bg-brand-1 text-white border-brand-1-dark shadow-sm"
                               : base === "yellow" ? "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200"
                                 : base === "green" ? "bg-green-100 text-green-800 border-green-200 hover:bg-green-200"
-                                : "bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200"
+                                : "bg-brand-4 text-brand-1-dark border-brand-3/40 hover:bg-brand-4-dark/50"
                           }`}
                         >
                           {label}
@@ -1135,7 +1432,7 @@ export function EmployeePos() {
                 <input
                   type="text"
                   placeholder="Ej: 9 de Jamón, 3 de Salame"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-brand-2"
                   value={customNote}
                   onChange={(e) => { setCustomNote(e.target.value); if (e.target.value.trim()) setSelectedVariant(null); }}
                 />
@@ -1160,7 +1457,7 @@ export function EmployeePos() {
                 className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${
                   !customNote.trim() && !selectedVariant
                     ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700 shadow-sm"
+                    : "bg-brand-1 hover:bg-brand-1-dark shadow-sm"
                 }`}
               >
                 Confirmar
@@ -1175,34 +1472,63 @@ export function EmployeePos() {
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
             <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <AppWindow className="text-blue-600" size={20} /> Seleccionar Opción de Venta
+                <AppWindow className="text-brand-1" size={20} /> Seleccionar Opción de Venta
               </h3>
               <button onClick={() => setUnitSaleModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="p-6">
-              <p className="text-center text-lg font-semibold mb-6">¿Cómo deseas vender <span className="text-blue-600">{unitSaleModal.name}</span>?</p>
+              <p className="text-center text-lg font-semibold mb-6">¿Cómo deseas vender <span className="text-brand-1">{unitSaleModal.name}</span>?</p>
+              <div className="mb-6 bg-brand-4/70 p-4 rounded-xl border border-brand-2/20">
+                <h4 className="text-sm font-bold text-gray-800 mb-3 text-center">Tipo de Precio (Unidad)</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPriceTier("retail")}
+                    className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                      priceTier === "retail"
+                        ? "bg-brand-1 text-white border-brand-1-dark shadow-sm"
+                        : "bg-white text-brand-1 border-brand-3/60 hover:bg-brand-4"
+                    }`}
+                  >
+                    Minorista
+                    <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitSalePrice(unitSaleModal, "retail"))}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriceTier("wholesale")}
+                    className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                      priceTier === "wholesale"
+                        ? "bg-brand-2 text-white border-brand-2-dark shadow-sm"
+                        : "bg-white text-brand-2-dark border-brand-2/30 hover:bg-brand-4/50"
+                    }`}
+                  >
+                    Mayorista
+                    <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitSalePrice(unitSaleModal, "wholesale"))}</span>
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Opción por Unidad */}
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex flex-col items-center justify-center">
-                  <h4 className="font-bold text-blue-800 text-lg mb-3">Por Unidad</h4>
-                  <p className="text-3xl font-black text-blue-900 mb-1">${(unitSaleModal.unitPrice || 0).toFixed(2)}</p>
-                  {(unitSaleModal.unitPrice || 0) <= 0 && (
-                    <p className="text-xs text-orange-600 mb-3 text-center">Configurá el precio en Configuración → Guardar Catálogo</p>
+                <div className="bg-brand-4 border-2 border-brand-3/60 rounded-xl p-4 flex flex-col items-center justify-center">
+                  <h4 className="font-bold text-brand-1 text-lg mb-3">Por Unidad</h4>
+                  <p className="text-3xl font-black text-brand-1 mb-1">{formatMoney(getUnitSalePrice(unitSaleModal, priceTier))}</p>
+                  {getUnitSalePrice(unitSaleModal, priceTier) <= 0 && (
+                    <p className="text-xs text-brand-1 mb-3 text-center">Configurá el precio en Configuración → Guardar Catálogo</p>
                   )}
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setUnitQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 bg-blue-200 text-blue-800 rounded-full font-bold">-</button>
+                    <button onClick={() => setUnitQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 bg-brand-3/40 text-brand-1 rounded-full font-bold">-</button>
                     <input
                       type="number"
                       value={unitQuantity}
                       onChange={(e) => setUnitQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-16 text-center font-bold text-lg bg-transparent border-b-2 border-blue-300 focus:outline-none"
+                      className="w-16 text-center font-bold text-lg bg-transparent border-b-2 border-brand-3 focus:outline-none"
                     />
-                    <button onClick={() => setUnitQuantity(q => q + 1)} className="w-8 h-8 bg-blue-200 text-blue-800 rounded-full font-bold">+</button>
+                    <button onClick={() => setUnitQuantity(q => q + 1)} className="w-8 h-8 bg-brand-3/40 text-brand-1 rounded-full font-bold">+</button>
                   </div>
                   <button
                     onClick={addUnitToCart}
-                    disabled={(unitSaleModal.unitPrice || 0) <= 0}
-                    className={`mt-5 w-full font-medium py-2 rounded-lg ${(unitSaleModal.unitPrice || 0) <= 0 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                    disabled={getUnitSalePrice(unitSaleModal, priceTier) <= 0}
+                    className={`mt-5 w-full font-medium py-2 rounded-lg ${getUnitSalePrice(unitSaleModal, priceTier) <= 0 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-brand-1 text-white hover:bg-brand-1-dark"}`}
                   >
                     Agregar {unitQuantity} {unitQuantity > 1 ? 'unidades' : 'unidad'}
                   </button>
@@ -1222,12 +1548,82 @@ export function EmployeePos() {
                         className="w-full flex justify-between items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 hover:border-gray-400"
                       >
                         <span className="font-medium">{pres.name}</span>
-                        <span className="font-bold text-gray-800">${pres.price.toFixed(2)}</span>
+                        <div className="text-right">
+                          <span className="font-bold text-gray-800 block">{formatMoney(pres.price)}</span>
+                          <span className="text-xs text-brand-2-dark font-semibold">Mayor: {formatMoney(pres.wholesalePrice || 0)}</span>
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {otherProductModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="bg-brand-4/50 border-b border-brand-3/30 p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Tag className="text-brand-3-dark" size={20} /> {otherProductModal.name}
+              </h3>
+              <button onClick={() => setOtherProductModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPriceTier("retail")}
+                  className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                    priceTier === "retail"
+                      ? "bg-brand-1 text-white border-brand-1-dark shadow-sm"
+                      : "bg-white text-brand-1-dark border-brand-3/40 hover:bg-brand-4/50"
+                  }`}
+                >
+                  Minorista
+                  <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitProductPrice(otherProductModal, "retail"))}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPriceTier("wholesale")}
+                  disabled={getUnitProductPrice(otherProductModal, "wholesale") <= 0}
+                  className={`py-3 px-3 rounded-lg border font-bold text-sm transition-colors ${
+                    getUnitProductPrice(otherProductModal, "wholesale") <= 0
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                      : priceTier === "wholesale"
+                        ? "bg-brand-2 text-white border-brand-2-dark shadow-sm"
+                        : "bg-white text-brand-2-dark border-brand-2/30 hover:bg-brand-4/50"
+                  }`}
+                >
+                  Mayorista
+                  <span className="block text-xs font-semibold mt-1">{formatMoney(getUnitProductPrice(otherProductModal, "wholesale"))}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center gap-3">
+                <button onClick={() => setOtherProductQuantity((q) => Math.max(1, q - 1))} className="w-10 h-10 bg-brand-4 text-brand-1-dark rounded-full font-bold">-</button>
+                <input
+                  type="number"
+                  value={otherProductQuantity}
+                  onChange={(e) => setOtherProductQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-20 text-center font-bold text-xl bg-transparent border-b-2 border-brand-3 focus:outline-none"
+                />
+                <button onClick={() => setOtherProductQuantity((q) => q + 1)} className="w-10 h-10 bg-brand-4 text-brand-1-dark rounded-full font-bold">+</button>
+              </div>
+
+              <button
+                onClick={addOtherProductToCart}
+                disabled={getUnitProductPrice(otherProductModal, priceTier) <= 0}
+                className={`w-full font-bold py-3 rounded-lg ${
+                  getUnitProductPrice(otherProductModal, priceTier) <= 0
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-brand-1 text-white hover:bg-brand-1-dark"
+                }`}
+              >
+                Agregar {otherProductQuantity} {otherProductQuantity > 1 ? "unidades" : "unidad"}
+              </button>
             </div>
           </div>
         </div>

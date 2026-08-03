@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { ShoppingCart, LogOut, Menu, X, Receipt } from "lucide-react";
 
@@ -20,7 +20,7 @@ export function EmployeeLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-background flex">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -35,7 +35,7 @@ export function EmployeeLayout() {
       >
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 whitespace-nowrap overflow-hidden">
           <div className="flex items-center">
-            <ShoppingCart className="flex-shrink-0 w-6 h-6 text-blue-600 ml-1" />
+            <ShoppingCart className="flex-shrink-0 w-6 h-6 text-brand-1 ml-1" />
             <span className="text-xl font-bold text-gray-900 ml-3 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               Punto de Venta
             </span>
@@ -59,11 +59,11 @@ export function EmployeeLayout() {
                   onClick={() => setSidebarOpen(false)}
                   className={`flex items-center px-2 py-3 rounded-lg transition-colors ${
                     isActive
-                      ? "bg-blue-50 text-blue-700"
+                      ? "bg-brand-4 text-brand-1"
                       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }`}
                 >
-                  <item.icon className={`flex-shrink-0 ml-1 mr-3 h-5 w-5 ${isActive ? "text-blue-700" : "text-gray-400"}`} />
+                  <item.icon className={`flex-shrink-0 ml-1 mr-3 h-5 w-5 ${isActive ? "text-brand-1" : "text-gray-400"}`} />
                   <span className="font-medium whitespace-nowrap transition-opacity duration-300 lg:opacity-0 group-hover:opacity-100">
                     {item.name}
                   </span>
@@ -75,7 +75,7 @@ export function EmployeeLayout() {
           <div className="p-4 border-t border-gray-200 whitespace-nowrap overflow-hidden">
             <button
               onClick={handleLogout}
-              className="flex items-center w-full px-2 py-3 text-gray-600 transition-colors rounded-lg hover:bg-red-50 hover:text-red-700"
+              className="flex items-center w-full px-2 py-3 text-gray-600 transition-colors rounded-lg hover:bg-brand-1/10 hover:text-brand-1-dark"
             >
               <LogOut className="flex-shrink-0 w-5 h-5 ml-1 mr-3 text-gray-400" />
               <span className="font-medium transition-opacity duration-300 lg:opacity-0 group-hover:opacity-100">
@@ -100,7 +100,7 @@ export function EmployeeLayout() {
           <span className="ml-4 text-lg font-bold text-gray-900">Punto de Venta</span>
         </header>
 
-        <main className="flex-1 overflow-auto bg-gray-50 p-6">
+        <main className="flex-1 overflow-auto bg-background p-6">
           <Outlet />
         </main>
       </div>

@@ -1,3 +1,22 @@
+const moneyFormatter = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+/** Formato argentino sin centavos: $1.234.567 */
+export function formatMoney(value) {
+  const num = Number(value);
+  const safe = Number.isNaN(num) ? 0 : num;
+  const sign = safe < 0 ? "-" : "";
+  return `${sign}$${moneyFormatter.format(Math.abs(safe))}`;
+}
+
+/** Gasto / débito: -$1.234 */
+export function formatMoneyDebit(value) {
+  const num = Math.abs(Number(value) || 0);
+  return `-$${moneyFormatter.format(num)}`;
+}
+
 export function nonNegative(value, fallback = 0) {
   const num = Number(value);
   if (Number.isNaN(num)) return fallback;
