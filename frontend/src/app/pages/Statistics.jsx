@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar } from "lucide-react";
+import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar, ChevronRight, History } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput } from "../utils/numbers.js";
 import { api } from "./api.js";
 
@@ -14,6 +14,8 @@ export function Statistics() {
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [catalog, setCatalog] = useState(null);
   const [currentExpenses, setCurrentExpenses] = useState([]);
+  const [histPeriod, setHistPeriod] = useState("week");
+  const [expandedPeriodKey, setExpandedPeriodKey] = useState(null);
 
   const loadData = async () => {
     const [savedRegs, savedPurchases, savedCatalog, savedSales, savedExpenses] = await Promise.all([
@@ -172,6 +174,64 @@ export function Statistics() {
   const formatHours = (h) => `${Math.floor(h)}h ${Math.round((h - Math.floor(h)) * 60).toString().padStart(2, "0")}m`;
 
   const rangeButtons = [{ id: "today", label: "Hoy" }, { id: "week", label: "Última Semana" }, { id: "month", label: "Último Mes" }, { id: "all", label: "Todo" }];
+
+  // --- Histórico por período ---
+  const getHistPeriodKey = (dateStr) => {
+    const d = new Date(dateStr);
+    if (histPeriod === "day") return d.toISOString().split("T")[0];
+    if (histPeriod === "week") {
+      const diff = (d.getDay() + 6) % 7;
+      const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
+      return monday.toISOString().split("T")[0];
+    }
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const buildHistGroups = () => {
+    const groups = {};
+    const ensure = (key) => {
+      if (!groups[key]) groups[key] = { key, sales: [], purchases: [], variableExpenses: 0, closedRegisters: 0 };
+    };
+    registers.forEach((r) => {
+      const key = getHistPeriodKey(r.date);
+      ensure(key);
+      groups[key].sales.push(...(r.sales || []));
+      groups[key].variableExpenses += r.totalExpenses || 0;
+      groups[key].closedRegisters += 1;
+    });
+    currentSales.forEach((s) => {
+      const key = getHistPeriodKey(s.date);
+      ensure(key);
+      groups[key].sales.push(s);
+    });
+    currentExpenses.forEach((e) => {
+      const key = getHistPeriodKey(e.date);
+      ensure(key);
+      groups[key].variableExpenses += e.amount;
+    });
+    purchases.forEach((p) => {
+      const key = getHistPeriodKey(p.date);
+      ensure(key);
+      groups[key].purchases.push(p);
+    });
+    return groups;
+  };
+
+  const formatHistKey = (key) => {
+    if (histPeriod === "day") {
+      return new Date(key + "T12:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    }
+    if (histPeriod === "week") {
+      const monday = new Date(key + "T12:00:00");
+      const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+      return `${monday.toLocaleDateString("es-AR", { day: "numeric", month: "short" })} – ${sunday.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" })}`;
+    }
+    const [year, month] = key.split("-");
+    return new Date(+year, +month - 1, 1).toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+  };
+
+  const histGroups = buildHistGroups();
+  const histGroupsList = Object.values(histGroups).sort((a, b) => b.key.localeCompare(a.key));
 
   return (
     <div className="space-y-6">
@@ -335,6 +395,129 @@ export function Statistics() {
               </tbody>
             </table>
           )}
+        </div>
+      </div>
+
+      {/* ===== HISTÓRICO POR PERÍODO ===== */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center justify-between gap-4">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <History className="w-5 h-5 text-gray-500" /> Histórico por Período
+          </h3>
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            {[{ id: "day", label: "Día" }, { id: "week", label: "Semana" }, { id: "month", label: "Mes" }].map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => { setHistPeriod(id); setExpandedPeriodKey(null); }}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${histPeriod === id ? "bg-white text-blue-600 shadow-sm border border-gray-200" : "text-gray-600 hover:text-gray-900"}`}
+              >{label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="divide-y divide-gray-100">
+          {histGroupsList.length === 0 ? (
+            <p className="text-center text-gray-400 py-12">No hay datos registrados aún</p>
+          ) : histGroupsList.map((group) => {
+            const revenue = group.sales.reduce((s, sale) => s + sale.total, 0);
+            const purchasesTotal = group.purchases.reduce((s, p) => s + p.amount, 0);
+            const netBalance = revenue - group.variableExpenses - purchasesTotal;
+            const productsSold = group.sales.reduce((s, sale) => s + sale.items.reduce((s2, i) => s2 + i.quantity, 0), 0);
+            const isExpanded = expandedPeriodKey === group.key;
+
+            const prodStats = {};
+            group.sales.forEach((sale) => sale.items.forEach((item) => {
+              if (!prodStats[item.name]) prodStats[item.name] = { quantity: 0, revenue: 0 };
+              prodStats[item.name].quantity += item.quantity;
+              prodStats[item.name].revenue += item.price * item.quantity;
+            }));
+            const topProds = Object.entries(prodStats)
+              .map(([name, s]) => ({ name, ...s }))
+              .sort((a, b) => b.quantity - a.quantity)
+              .slice(0, 5);
+
+            return (
+              <div key={group.key}>
+                <button
+                  onClick={() => setExpandedPeriodKey(isExpanded ? null : group.key)}
+                  className="w-full px-6 py-4 flex flex-wrap items-center gap-4 hover:bg-gray-50/70 transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-[160px]">
+                    <p className="font-semibold text-gray-900 capitalize text-sm">{formatHistKey(group.key)}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {group.sales.length} venta{group.sales.length !== 1 ? "s" : ""}
+                      {group.closedRegisters > 0 && ` · ${group.closedRegisters} caja${group.closedRegisters !== 1 ? "s" : ""} cerrada${group.closedRegisters !== 1 ? "s" : ""}`}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-5 items-center">
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Ingresos</p>
+                      <p className="font-bold text-green-700 text-sm">${revenue.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Productos</p>
+                      <p className="font-bold text-orange-600 text-sm">{productsSold}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Compras</p>
+                      <p className="font-bold text-red-500 text-sm">-${purchasesTotal.toFixed(2)}</p>
+                    </div>
+                    <div className={`text-right px-3 py-1.5 rounded-lg ${netBalance >= 0 ? "bg-blue-50" : "bg-red-50"}`}>
+                      <p className="text-xs text-gray-400">Neto</p>
+                      <p className={`font-bold text-sm ${netBalance >= 0 ? "text-blue-700" : "text-red-600"}`}>${netBalance.toFixed(2)}</p>
+                    </div>
+                    <ChevronRight size={16} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="px-6 pb-6 pt-4 bg-gray-50/50 border-t border-gray-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {topProds.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Package size={12} /> Top productos</h4>
+                          <div className="space-y-2.5">
+                            {topProds.map((p, i) => (
+                              <div key={p.name} className="flex items-center gap-3">
+                                <span className="w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold shrink-0">{i + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="font-medium text-gray-800 truncate">{p.name}</span>
+                                    <span className="text-gray-500 ml-2 shrink-0 text-xs">{p.quantity} und · ${p.revenue.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {group.purchases.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><ShoppingCart size={12} /> Compras de insumos</h4>
+                          <div className="space-y-2">
+                            {group.purchases.slice().reverse().map((p) => (
+                              <div key={p.id} className="flex justify-between items-center text-sm py-1.5 border-b border-gray-100 last:border-0">
+                                <div>
+                                  <p className="font-medium text-gray-800">{p.description}</p>
+                                  <p className="text-xs text-gray-400">{new Date(p.date).toLocaleDateString("es-AR")}</p>
+                                </div>
+                                <span className="font-bold text-red-500 shrink-0 ml-4">-${p.amount.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {topProds.length === 0 && group.purchases.length === 0 && (
+                        <p className="text-sm text-gray-400 col-span-2 py-2">Sin detalles adicionales para este período</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
