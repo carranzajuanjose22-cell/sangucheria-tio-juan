@@ -1,7 +1,7 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Package, Plus, Settings2, Save, X, Calculator, Trash2, RotateCcw, Pencil, Check, ChevronDown } from "lucide-react";
 import { api } from "./api.js";
-import { nonNegative, isAllowedNumberInput, formatMoney } from "../utils/numbers.js";
+import { nonNegative, isAllowedNumberInput, formatMoney, formatInputNumber, parseInputNumber } from "../utils/numbers.js";
 import {
   isUnitSaleVariety,
   usesUnitRecipe,
@@ -128,7 +128,7 @@ function VarietyCard({
                             type="text"
                             inputMode="decimal"
                             value={editingPrice.value}
-                            onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setEditingPrice({ ...editingPrice, value: e.target.value }); }}
+                            onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setEditingPrice({ ...editingPrice, value: v }); }}
                             onKeyDown={(e) => { if (e.key === "Enter") confirmEditPrice(); if (e.key === "Escape") cancelEditPrice(); }}
                             className="w-full px-3 py-1.5 border border-brand-2 rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                             placeholder="0.00"
@@ -144,7 +144,7 @@ function VarietyCard({
                             type="text"
                             inputMode="decimal"
                             value={editingPrice.value}
-                            onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setEditingPrice({ ...editingPrice, value: e.target.value }); }}
+                            onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setEditingPrice({ ...editingPrice, value: v }); }}
                             onKeyDown={(e) => { if (e.key === "Enter") confirmEditPrice(); if (e.key === "Escape") cancelEditPrice(); }}
                             className="w-full px-3 py-1.5 border border-brand-2 rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                             placeholder="0.00"
@@ -193,8 +193,8 @@ function VarietyCard({
                       autoFocus
                       type="text"
                       inputMode="decimal"
-                      value={unitPriceValue}
-                      onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setUnitPriceValue(e.target.value); }}
+                      value={formatInputNumber(unitPriceValue)}
+                      onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setUnitPriceValue(v); }}
                       onKeyDown={(e) => { if (e.key === "Enter") handleConfirmUnitPrice(); if (e.key === "Escape") handleCancelUnitPrice(); }}
                       className="w-24 px-2 py-1 border border-brand-2 rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                       placeholder="0.00"
@@ -222,8 +222,8 @@ function VarietyCard({
                       autoFocus
                       type="text"
                       inputMode="decimal"
-                      value={unitWholesalePriceValue}
-                      onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setUnitWholesalePriceValue(e.target.value); }}
+                      value={formatInputNumber(unitWholesalePriceValue)}
+                      onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setUnitWholesalePriceValue(v); }}
                       onKeyDown={(e) => { if (e.key === "Enter") handleConfirmUnitWholesalePrice(); if (e.key === "Escape") handleCancelUnitWholesalePrice(); }}
                       className="w-24 px-2 py-1 border border-brand-2 rounded-lg focus:ring-2 focus:ring-brand-2 outline-none"
                       placeholder="0.00"
@@ -749,25 +749,23 @@ export function ProductBuilder({ customInputs = [] }) {
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Precio unitario minorista</label>
                         <input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           placeholder="0.00"
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500"
-                          value={newVarUnitPrice}
-                          onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setNewVarUnitPrice(e.target.value); }}
+                          value={formatInputNumber(newVarUnitPrice)}
+                          onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setNewVarUnitPrice(v); }}
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Precio unitario mayorista</label>
                         <input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           placeholder="0.00"
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-green-500"
-                          value={newVarUnitWholesalePrice}
-                          onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setNewVarUnitWholesalePrice(e.target.value); }}
+                          value={formatInputNumber(newVarUnitWholesalePrice)}
+                          onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setNewVarUnitWholesalePrice(v); }}
                         />
                       </div>
                     </div>
@@ -840,7 +838,7 @@ export function ProductBuilder({ customInputs = [] }) {
                   {[{ key: "docena", label: "Docena" }, { key: "media", label: "Media Docena" }, { key: "plancha", label: "Plancha de 3" }].map(({ key, label }) => (
                     <div key={key}>
                       <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
-                      <input type="number" min="0" step="0.01" placeholder="0.00" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-brand-2" value={newVarPrices[key]} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setNewVarPrices({ ...newVarPrices, [key]: e.target.value }); }} />
+                      <input type="text" inputMode="decimal" placeholder="0.00" className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-brand-2" value={formatInputNumber(newVarPrices[key])} onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setNewVarPrices({ ...newVarPrices, [key]: v }); }} />
                     </div>
                   ))}
                 </div>

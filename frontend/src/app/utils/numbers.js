@@ -23,12 +23,33 @@ export function nonNegative(value, fallback = 0) {
   return Math.max(0, num);
 }
 
+export function parseInputNumber(value) {
+  if (value === undefined || value === null) return "";
+  // Eliminamos los puntos (separador de miles en AR) para guardar/procesar el string numérico crudo.
+  return value.toString().replace(/\./g, "");
+}
+
+export function formatInputNumber(value) {
+  if (value === "" || value === undefined || value === null) return "";
+  const clean = parseInputNumber(value);
+  if (isNaN(clean) || clean === "") return value; 
+  // Eliminamos cualquier parte decimal al formatear.
+  const parts = clean.split(/[.,]/);
+  const integerPart = parts[0];
+  // Reemplazamos cada 3 ceros con un punto
+  return integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
 export function isAllowedDecimalInput(value) {
-  return value === "" || /^\d*\.?\d*$/.test(value);
+  const clean = parseInputNumber(value);
+  return clean === "" || /^\d*$/.test(clean);
 }
 
 export function isAllowedNumberInput(value) {
-  if (value === "" || value === "-") return value === "";
-  const num = Number(value);
-  return !Number.isNaN(num) && num >= 0;
+  const clean = parseInputNumber(value);
+  if (clean === "" || clean === "-") return clean === "";
+  const num = Number(clean);
+  // Validamos si es un entero no negativo
+  return !Number.isNaN(num) && num >= 0 && /^\d*$/.test(clean);
 }
+

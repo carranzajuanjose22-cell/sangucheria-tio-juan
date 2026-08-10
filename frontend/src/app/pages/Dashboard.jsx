@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Receipt, ShoppingCart, Clock, Lock, Unlock, X, CheckCircle2, Eye } from "lucide-react";
-import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
+import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit, formatInputNumber, parseInputNumber } from "../utils/numbers.js";
 import { api } from "./api.js";
 import { usePosStore } from "../hooks/usePosStore.js";
 import { closeRegister } from "../utils/register.js";
@@ -256,7 +256,7 @@ export function Dashboard() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Monto Inicial</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
-                  <input type="text" inputMode="decimal" value={initialCashInput} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setInitialCashInput(v); }} className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-lg font-medium" placeholder="0.00" autoFocus />
+                  <input type="text" inputMode="decimal" value={formatInputNumber(initialCashInput)} onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedDecimalInput(v)) setInitialCashInput(v); }} className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-lg font-medium" placeholder="0.00" autoFocus />
                 </div>
               </div>
             </div>

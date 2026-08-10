@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar, ChevronRight, History } from "lucide-react";
-import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit } from "../utils/numbers.js";
+import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit, formatInputNumber, parseInputNumber } from "../utils/numbers.js";
 import { api } from "./api.js";
 import { buildEmployeeHoursStats, formatShiftHours } from "../utils/registerHours.js";
 import { isDateInRange } from "../utils/dateRanges.js";
@@ -134,7 +134,7 @@ export function Statistics() {
   const employeeHoursArray = buildEmployeeHoursStats(filteredRegisters, registerState, dateRange);
 
   const handleRegisterPurchase = async () => {
-    const amount = nonNegative(purchaseAmount);
+    const amount = nonNegative(parseInputNumber(purchaseAmount));
     if (!purchaseDesc.trim() || amount <= 0) { alert("Por favor ingresa una etiqueta y un monto válido"); return; }
     try {
       const newPurchase = { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString(), description: purchaseDesc.trim(), amount };
@@ -429,7 +429,7 @@ export function Statistics() {
                   <div className="flex flex-wrap gap-5 items-center">
                     <div className="text-right">
                       <p className="text-xs text-gray-400">Ingresos</p>
-                      <p className="font-bold text-green-700 text-sm">${revenue.toFixed(2)}</p>
+                      <p className="font-bold text-green-700 text-sm">{formatMoney(revenue)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-400">Productos</p>
@@ -437,11 +437,11 @@ export function Statistics() {
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-400">Compras</p>
-                      <p className="font-bold text-red-500 text-sm">-${purchasesTotal.toFixed(2)}</p>
+                      <p className="font-bold text-red-500 text-sm">{formatMoneyDebit(purchasesTotal)}</p>
                     </div>
                     <div className={`text-right px-3 py-1.5 rounded-lg ${netBalance >= 0 ? "bg-blue-50" : "bg-red-50"}`}>
                       <p className="text-xs text-gray-400">Neto</p>
-                      <p className={`font-bold text-sm ${netBalance >= 0 ? "text-blue-700" : "text-red-600"}`}>${netBalance.toFixed(2)}</p>
+                      <p className={`font-bold text-sm ${netBalance >= 0 ? "text-blue-700" : "text-red-600"}`}>{formatMoney(netBalance)}</p>
                     </div>
                     <ChevronRight size={16} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
                   </div>
@@ -460,7 +460,7 @@ export function Statistics() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex justify-between text-sm">
                                     <span className="font-medium text-gray-800 truncate">{p.name}</span>
-                                    <span className="text-gray-500 ml-2 shrink-0 text-xs">{p.quantity} und · ${p.revenue.toFixed(2)}</span>
+                                    <span className="text-gray-500 ml-2 shrink-0 text-xs">{p.quantity} und · {formatMoney(p.revenue)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -479,7 +479,7 @@ export function Statistics() {
                                   <p className="font-medium text-gray-800">{p.description}</p>
                                   <p className="text-xs text-gray-400">{new Date(p.date).toLocaleDateString("es-AR")}</p>
                                 </div>
-                                <span className="font-bold text-red-500 shrink-0 ml-4">-${p.amount.toFixed(2)}</span>
+                                <span className="font-bold text-red-500 shrink-0 ml-4">{formatMoneyDebit(p.amount)}</span>
                               </div>
                             ))}
                           </div>
@@ -514,7 +514,7 @@ export function Statistics() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Monto del Gasto</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
-                  <input type="text" inputMode="decimal" value={purchaseAmount} onChange={(e) => { const v = e.target.value; if (isAllowedDecimalInput(v)) setPurchaseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-3" placeholder="0.00" />
+                  <input type="text" inputMode="decimal" value={formatInputNumber(purchaseAmount)} onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedDecimalInput(v)) setPurchaseAmount(v); }} className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-3" placeholder="0.00" />
                 </div>
               </div>
             </div>

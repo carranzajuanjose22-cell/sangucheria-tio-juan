@@ -1,10 +1,10 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Plus, X, Edit2, Trash2, ChevronDown } from "lucide-react";
 import { ProductBuilder } from "../pages/ProductBuilder.jsx";
 import { UnitProductsBuilder } from "../pages/UnitProductsBuilder.jsx";
 import { PromotionsBuilder } from "../pages/PromotionsBuilder.jsx";
 import { api } from "../pages/api.js";
-import { nonNegative, isAllowedNumberInput, formatMoney } from "../utils/numbers.js";
+import { nonNegative, isAllowedNumberInput, formatMoney, formatInputNumber, parseInputNumber } from "../utils/numbers.js";
 
 export function ParametersTab() {
   const [services, setServices] = useState([]);
@@ -344,7 +344,7 @@ function ServiceModal({ onClose, onSave, initialData }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Costo</label>
-          <input required type="number" step="0.01" min="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={cost} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setCost(e.target.value); }} />
+          <input required type="text" inputMode="decimal" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={formatInputNumber(cost)} onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setCost(v); }} />
         </div>
         <div className="pt-4 flex justify-end">
           <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark">
@@ -375,7 +375,7 @@ function PaymentModal({ onClose, onSave, initialData }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Recargo (%)</label>
-          <input required type="number" step="0.01" min="0" max="100" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={surcharge} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setSurcharge(e.target.value); }} />
+          <input required type="text" inputMode="decimal" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={formatInputNumber(surcharge)} onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setSurcharge(v); }} />
           <p className="mt-1 text-xs text-gray-500">Ingresa 0 si no hay recargo.</p>
         </div>
         <div className="pt-4 flex justify-end">
@@ -414,7 +414,7 @@ function InputModal({ onClose, onSave, initialData }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">{isFood ? "Precio por Kg" : "Precio por Unidad"}</label>
-          <input required type="number" step="0.01" min="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={price} onChange={(e) => { if (isAllowedNumberInput(e.target.value)) setPrice(e.target.value); }} />
+          <input required type="text" inputMode="decimal" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg" value={formatInputNumber(price)} onChange={(e) => { const v = parseInputNumber(e.target.value); if (isAllowedNumberInput(v)) setPrice(v); }} />
         </div>
         <div className="pt-4 flex justify-end">
           <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-brand-1 rounded-lg hover:bg-brand-1-dark">
