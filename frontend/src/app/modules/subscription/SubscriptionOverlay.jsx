@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { AlertTriangle, Lock, X, LogOut } from "lucide-react";
 import { useSubscription } from "./SubscriptionContext.jsx";
 import { useLocation, useNavigate } from "react-router";
@@ -13,29 +13,13 @@ export function SubscriptionOverlay() {
   const isLoginPage = location.pathname === "/";
   const isCreatorPage = location.pathname === "/creator";
 
-  // Lógica de aviso periódico (cada 3 horas, visible 10 minutos)
+  // Aviso fijo en la parte superior
   useEffect(() => {
-    let showTimer;
-    let hideTimer;
-
-    const cycleWarning = () => {
-      setShowWarning(true);
-      hideTimer = setTimeout(() => {
-        setShowWarning(false);
-      }, 600000); // 10 minutos
-      showTimer = setTimeout(cycleWarning, 10800000); // 3 horas
-    };
-
     if (isWarningPhase && userRole !== "creator") {
-      cycleWarning();
+      setShowWarning(true);
     } else {
       setShowWarning(false);
     }
-
-    return () => {
-      clearTimeout(showTimer);
-      clearTimeout(hideTimer);
-    };
   }, [isWarningPhase, userRole]);
 
   const getDaysRemaining = () => {
@@ -84,23 +68,19 @@ export function SubscriptionOverlay() {
     );
   }
 
-  // Toast de aviso de vencimiento próximo
+  // Aviso de vencimiento fijo superior (estilo pestaña)
   if (showWarning && userRole !== "creator" && !isLoginPage && !isCreatorPage) {
     return (
-      <div className="fixed bottom-4 right-4 z-[9990] bg-white rounded-lg shadow-xl border-l-4 border-brand-3 p-4 max-w-sm w-full transition-all transform duration-300 ease-out translate-y-0 opacity-100">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-brand-3-dark mt-0.5 flex-shrink-0" />
-            <div>
-              <h3 className="font-medium text-gray-900">Aviso de Servicio</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Su servicio vence en {getDaysRemaining()} {getDaysRemaining() === 1 ? "día" : "días"}. De no renovarse, se restringirá el acceso a la aplicación.
-              </p>
-            </div>
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[9990] bg-orange-500 text-white shadow-lg rounded-b-2xl px-6 py-3 flex items-center justify-center animate-fade-in-down max-w-[95vw] sm:max-w-max border-b border-x border-orange-600">
+        <div className="flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-white flex-shrink-0" />
+          <div className="text-sm md:text-base font-medium text-center">
+            ¡Aviso Importante! Su servicio vence en {getDaysRemaining()} {getDaysRemaining() === 1 ? "día" : "días"}. De no renovarse, se restringirá el acceso.
           </div>
           <button
             onClick={() => setShowWarning(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors ml-2 flex-shrink-0"
+            className="text-orange-200 hover:text-white transition-colors ml-2 flex-shrink-0"
+            title="Cerrar aviso"
           >
             <X className="w-5 h-5" />
           </button>
