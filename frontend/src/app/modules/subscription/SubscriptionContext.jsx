@@ -13,6 +13,9 @@ export function SubscriptionProvider({ children }) {
 
   const [isWarningPhase, setIsWarningPhase] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  const [paymentWarning, setPaymentWarningState] = useState(() => {
+    return localStorage.getItem("payment_warning") === "true";
+  });
 
   const setDeadline = (date) => {
     localStorage.setItem("subscription_deadline", date);
@@ -31,6 +34,15 @@ export function SubscriptionProvider({ children }) {
       localStorage.removeItem("userRole");
     }
     setUserRoleState(role);
+  };
+
+  const setPaymentWarning = (isActive) => {
+    if (isActive) {
+      localStorage.setItem("payment_warning", "true");
+    } else {
+      localStorage.removeItem("payment_warning");
+    }
+    setPaymentWarningState(isActive);
   };
 
   // Sincronizar role desde localStorage (por si cambia en otra pestaña)
@@ -107,6 +119,8 @@ export function SubscriptionProvider({ children }) {
         isExpired,
         userRole,
         setUserRole,
+        paymentWarning,
+        setPaymentWarning,
       }}
     >
       {children}
