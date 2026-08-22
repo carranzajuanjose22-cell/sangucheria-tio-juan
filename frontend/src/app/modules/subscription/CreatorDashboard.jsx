@@ -1,8 +1,8 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { useSubscription } from "./SubscriptionContext.jsx";
 import {
   Settings, Calendar, ShieldCheck, Play, RotateCcw, LogOut,
-  CheckCircle2, AlertCircle, X,
+  CheckCircle2, AlertCircle, X, Lock
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
@@ -111,6 +111,15 @@ export function CreatorDashboard() {
       "success",
       "Servicio reactivado",
       "La restricción de uso fue levantada. Los usuarios pueden acceder a la aplicación con normalidad."
+    );
+  };
+
+  const handleInstantBlock = () => {
+    setDeadline(new Date(0).toISOString());
+    showModal(
+      "success",
+      "Servicio bloqueado",
+      "El acceso a la aplicación ha sido bloqueado instantáneamente."
     );
   };
 
@@ -228,6 +237,31 @@ export function CreatorDashboard() {
               <p className="text-sm text-gray-500 mt-2">
                 Cada mes, al superar este día, el sistema bloqueará el acceso a la app para admin y empleados. Los avisos de vencimiento comenzarán 5 días antes.
               </p>
+            </div>
+
+            {/* Bloqueo instantáneo */}
+            <div className="pt-6 border-t border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Bloqueo de Emergencia</h2>
+              <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-medium text-red-900">Bloquear servicio instantáneamente</h3>
+                  <p className="text-sm text-red-700 mt-1">
+                    Corta el acceso a la aplicación de forma inmediata para todos los usuarios.
+                  </p>
+                </div>
+                <button
+                  onClick={handleInstantBlock}
+                  disabled={isExpired}
+                  className={`w-full md:w-auto text-white font-semibold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                    isExpired
+                      ? "bg-red-400 cursor-not-allowed"
+                      : "bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                  }`}
+                >
+                  <Lock className="w-5 h-5" />
+                  {isExpired ? "Servicio Bloqueado" : "Bloquear Ahora"}
+                </button>
+              </div>
             </div>
 
             {/* Sección de reactivación */}
