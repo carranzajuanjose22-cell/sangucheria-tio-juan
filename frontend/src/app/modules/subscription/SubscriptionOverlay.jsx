@@ -4,7 +4,7 @@ import { useSubscription } from "./SubscriptionContext.jsx";
 import { useLocation, useNavigate } from "react-router";
 
 export function SubscriptionOverlay() {
-  const { isWarningPhase, isExpired, userRole, deadline, setUserRole } = useSubscription();
+  const { isWarningPhase, isExpired, userRole, deadline, setUserRole, paymentWarning } = useSubscription();
   const [showWarning, setShowWarning] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -84,6 +84,20 @@ export function SubscriptionOverlay() {
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Aviso de falta de pago (independiente de la bomba lógica)
+  if (paymentWarning && userRole !== "creator" && !isLoginPage && !isCreatorPage) {
+    return (
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[9989] bg-red-600 text-white shadow-lg rounded-b-2xl px-6 py-3 flex items-center justify-center animate-fade-in-down max-w-[95vw] sm:max-w-max border-b border-x border-red-700 mt-0 sm:mt-0" style={{ top: showWarning ? '60px' : '0' }}>
+        <div className="flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-white flex-shrink-0 animate-pulse" />
+          <div className="text-sm md:text-base font-medium text-center">
+            Aún no se detectó el pago del sistema. Corre riesgo la estabilidad del mismo.
+          </div>
         </div>
       </div>
     );

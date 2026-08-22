@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useSubscription } from "./SubscriptionContext.jsx";
 import {
   Settings, Calendar, ShieldCheck, Play, RotateCcw, LogOut,
-  CheckCircle2, AlertCircle, X, Lock
+  CheckCircle2, AlertCircle, X, Lock, Bell, BellOff
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
@@ -69,7 +69,7 @@ function AlertModal({ open, type = "success", title, message, onClose }) {
 }
 
 export function CreatorDashboard() {
-  const { deadline, setDeadline, clearDeadline, isExpired, isWarningPhase, setUserRole } = useSubscription();
+  const { deadline, setDeadline, clearDeadline, isExpired, isWarningPhase, setUserRole, paymentWarning, setPaymentWarning } = useSubscription();
   const [selectedDay, setSelectedDay] = useState("");
   const navigate = useNavigate();
 
@@ -121,6 +121,24 @@ export function CreatorDashboard() {
       "Servicio bloqueado",
       "El acceso a la aplicación ha sido bloqueado instantáneamente."
     );
+  };
+
+  const handleTogglePaymentWarning = () => {
+    const newState = !paymentWarning;
+    setPaymentWarning(newState);
+    if (newState) {
+      showModal(
+        "warning",
+        "Aviso de Pago Activado",
+        "Se ha activado el aviso de falta de pago. Los usuarios verán una advertencia sobre la estabilidad del sistema."
+      );
+    } else {
+      showModal(
+        "success",
+        "Aviso de Pago Desactivado",
+        "El aviso de falta de pago ha sido removido."
+      );
+    }
   };
 
   const handleLogout = () => {
@@ -285,6 +303,41 @@ export function CreatorDashboard() {
                 </div>
               </div>
             )}
+
+            {/* Sección de aviso de pago */}
+            <div className="pt-6 border-t border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Aviso de Falta de Pago</h2>
+              <div className={`border rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 ${paymentWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                <div>
+                  <h3 className={`font-medium ${paymentWarning ? 'text-red-900' : 'text-gray-900'}`}>
+                    {paymentWarning ? 'Aviso Activo' : 'Aviso Inactivo'}
+                  </h3>
+                  <p className={`text-sm mt-1 ${paymentWarning ? 'text-red-700' : 'text-gray-600'}`}>
+                    Muestra un mensaje de advertencia indicando que no se detectó el pago y la estabilidad del sistema está en riesgo.
+                  </p>
+                </div>
+                <button
+                  onClick={handleTogglePaymentWarning}
+                  className={`w-full md:w-auto text-white font-semibold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                    paymentWarning 
+                      ? 'bg-red-600 hover:bg-red-700 focus:ring-red-600' 
+                      : 'bg-gray-800 hover:bg-gray-900 focus:ring-gray-800'
+                  }`}
+                >
+                  {paymentWarning ? (
+                    <>
+                      <BellOff className="w-5 h-5" />
+                      Desactivar Aviso
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="w-5 h-5" />
+                      Activar Aviso
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
