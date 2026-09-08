@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
 import { Plus, Minus, Search, Trash2, Receipt, ShoppingCart, Printer, X, Lock, CheckCircle2, ChevronRight, Tag, Unlock, TrendingDown, LayoutGrid, Clock, DollarSign, CreditCard, AppWindow, Gift } from "lucide-react";
 import { api } from "./api.js";
@@ -74,6 +74,7 @@ export function EmployeePos() {
   const [discountPercent, setDiscountPercent] = useState("0");
   const [otherProductModal, setOtherProductModal] = useState(null);
   const [otherProductQuantity, setOtherProductQuantity] = useState(1);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     const loadInputs = async () => {
@@ -411,7 +412,8 @@ export function EmployeePos() {
   };
 
   const handleLoadOrder = async () => {
-    if (cart.length === 0 || isRegisterClosed) return;
+    if (cart.length === 0 || isRegisterClosed || isProcessing) return;
+    setIsProcessing(true);
     const newOrder = {
       id: Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString(),
@@ -431,6 +433,8 @@ export function EmployeePos() {
       setAdvanceAmount("");
     } catch (err) {
       alert("Error al cargar la orden. Revisa tu conexión a internet.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -454,23 +458,31 @@ export function EmployeePos() {
   };
 
   const handleDeliverOrder = async (id) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       const updated = pendingOrders.filter(o => o.id !== id);
       await api.post("/store/pos_pending_orders", updated);
       await refreshPosStore();
     } catch (err) {
       alert("Error al entregar la orden.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleDiscardOrder = async (id) => {
+    if (isProcessing) return;
     if (confirm("¿Estás seguro de descartar este pedido?")) {
+      setIsProcessing(true);
       try {
         const updated = pendingOrders.filter(o => o.id !== id);
         await api.post("/store/pos_pending_orders", updated);
         await refreshPosStore();
       } catch (err) {
         alert("Error al descartar la orden.");
+      } finally {
+        setIsProcessing(false);
       }
     }
   };
@@ -483,12 +495,13 @@ export function EmployeePos() {
   };
 
   const handleRegisterSale = async () => {
-    if (!payingOrder || isRegisterClosed) return;
+    if (!payingOrder || isRegisterClosed || isProcessing) return;
     if (totalPaid < amountDue) {
       alert(`Falta pagar ${formatMoney(remaining)}`);
       return;
     }
     
+    setIsProcessing(true);
     const finalPayments = [...payments];
     if (payingOrder.advanceAmount > 0) {
       finalPayments.unshift({ method: "Seña", amount: payingOrder.advanceAmount });
@@ -539,6 +552,8 @@ export function EmployeePos() {
     setPayments([{ method: availablePayments[0]?.name || "", amount: 0 }]);
     } catch (err) {
       alert(err.message || "Error al registrar la venta. Revisa la conexión.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -943,11 +958,11 @@ export function EmployeePos() {
                 </ul>
                 <div className="flex gap-2 mt-auto">
                   {order.isPaid ? (
-                    <button onClick={() => handleDeliverOrder(order.id)} className="flex-1 bg-brand-40 text-white rounded-lg text-sm font-bold hover:bg-brand-1-dark py-2">Entregado / Retirar</button>
+                    <button onClick={() => handleDeliverOrder(order.id)} disabled={isProcessing} className="flex-1 bg-brand-40 text-white rounded-lg text-sm font-bold hover:bg-brand-1-dark py-2 disabled:opacity-50">Entregado / Retirar</button>
                   ) : (
                     <>
-                      <button onClick={() => handleDiscardOrder(order.id)} className="px-3 py-2 bg-white border border-brand-1/25 text-brand-1 rounded-lg text-sm font-medium hover:bg-brand-1/10">Descartar</button>
-                      <button onClick={() => handleOpenPayment(order)} className="flex-1 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600">Cobrar y Registrar</button>
+                      <button onClick={() => handleDiscardOrder(order.id)} disabled={isProcessing} className="px-3 py-2 bg-white border border-brand-1/25 text-brand-1 rounded-lg text-sm font-medium hover:bg-brand-1/10 disabled:opacity-50">Descartar</button>
+                      <button onClick={() => handleOpenPayment(order)} disabled={isProcessing} className="flex-1 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 disabled:opacity-50">Cobrar y Registrar</button>
                     </>
                   )}
                 </div>
@@ -1242,7 +1257,7 @@ export function EmployeePos() {
             </div>
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex gap-3 shrink-0">
               <button onClick={() => { setModalState("none"); setPayingOrder(null); setDiscountPercent("0"); }} className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleRegisterSale} disabled={totalPaid < amountDue} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < amountDue ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>Confirmar Venta</button>
+              <button onClick={handleRegisterSale} disabled={totalPaid < amountDue || isProcessing} className={`flex-1 py-2.5 rounded-lg font-bold text-white transition-colors ${totalPaid < amountDue || isProcessing ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-sm"}`}>{isProcessing ? "Procesando..." : "Confirmar Venta"}</button>
             </div>
           </div>
         </div>
