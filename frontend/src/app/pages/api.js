@@ -42,6 +42,10 @@ async function request(method, endpoint, data) {
     throw new Error("Sesión expirada");
   }
 
+  if (response.status === 402) {
+    window.dispatchEvent(new CustomEvent("subscription-expired"));
+  }
+
   if (!response.ok) {
     const errData = await response.json().catch(() => null);
     throw new Error(errData?.error || `Error en la petición ${method}`);

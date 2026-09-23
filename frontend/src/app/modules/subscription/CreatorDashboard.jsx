@@ -69,7 +69,7 @@ function AlertModal({ open, type = "success", title, message, onClose }) {
 }
 
 export function CreatorDashboard() {
-  const { deadline, setDeadline, clearDeadline, isExpired, isWarningPhase, setUserRole, paymentWarning, setPaymentWarning } = useSubscription();
+  const { deadline, cutoffDay, setDeadline, renewSubscription, blockSubscription, isExpired, isWarningPhase, setUserRole, paymentWarning, setPaymentWarning } = useSubscription();
   const [selectedDay, setSelectedDay] = useState("");
   const navigate = useNavigate();
 
@@ -82,20 +82,24 @@ export function CreatorDashboard() {
   const closeModal = () => setModal((m) => ({ ...m, open: false }));
 
   React.useEffect(() => {
-    if (deadline && !isNaN(Number(deadline)) && deadline.length <= 2) {
-      setSelectedDay(deadline);
+    if (cutoffDay) {
+      setSelectedDay(String(cutoffDay));
     }
-  }, [deadline]);
+  }, [cutoffDay]);
 
-  const handleStartSubscription = () => {
+  const handleStartSubscription = async () => {
     const day = parseInt(selectedDay, 10);
     if (!isNaN(day) && day >= 1 && day <= 31) {
-      setDeadline(day.toString());
-      showModal(
-        "success",
-        "Período configurado",
-        `El ciclo de suscripción fue configurado para el día ${day} de cada mes. Los avisos comenzarán 5 días antes del corte.`
-      );
+      try {
+        await setDeadline(day);
+        showModal(
+          "success",
+          "Período configurado",
+          `El ciclo de suscripción fue configurado para el día ${day} de cada mes. Los avisos comenzarán 5 días antes del corte.`
+        );
+      } catch (error) {
+        showModal("error", "No se pudo configurar", error.message);
+      }
     } else {
       showModal(
         "error",
@@ -105,39 +109,51 @@ export function CreatorDashboard() {
     }
   };
 
-  const handleReactivate = () => {
-    clearDeadline();
-    showModal(
-      "success",
-      "Servicio reactivado",
-      "La restricción de uso fue levantada. Los usuarios pueden acceder a la aplicación con normalidad."
-    );
-  };
-
-  const handleInstantBlock = () => {
-    setDeadline(new Date(0).toISOString());
-    showModal(
-      "success",
-      "Servicio bloqueado",
-      "El acceso a la aplicación ha sido bloqueado instantáneamente."
-    );
-  };
-
-  const handleTogglePaymentWarning = () => {
-    const newState = !paymentWarning;
-    setPaymentWarning(newState);
-    if (newState) {
-      showModal(
-        "warning",
-        "Aviso de Pago Activado",
-        "Se ha activado el aviso de falta de pago. Los usuarios verán una advertencia sobre la estabilidad del sistema."
-      );
-    } else {
+  const handleReactivate = async () => {
+    try {
+      await renewSubscription();
       showModal(
         "success",
-        "Aviso de Pago Desactivado",
-        "El aviso de falta de pago ha sido removido."
+        "Pago registrado",
+        "La renovación quedó registrada y el acceso fue reactivado hasta el próximo día de corte."
       );
+    } catch (error) {
+      showModal("error", "No se pudo renovar", error.message);
+    }
+  };
+
+  const handleInstantBlock = async () => {
+    try {
+      await blockSubscription();
+      showModal(
+        "success",
+        "Servicio bloqueado",
+        "El acceso a la aplicación ha sido bloqueado instantáneamente."
+      );
+    } catch (error) {
+      showModal("error", "No se pudo bloquear", error.message);
+    }
+  };
+
+  const handleTogglePaymentWarning = async () => {
+    const newState = !paymentWarning;
+    try {
+      await setPaymentWarning(newState);
+      if (newState) {
+        showModal(
+          "warning",
+          "Aviso de Pago Activado",
+          "Se ha activado el aviso de falta de pago. Los usuarios verán una advertencia sobre la estabilidad del sistema."
+        );
+      } else {
+        showModal(
+          "success",
+          "Aviso de Pago Desactivado",
+          "El aviso de falta de pago ha sido removido."
+        );
+      }
+    } catch (error) {
+      showModal("error", "No se pudo actualizar el aviso", error.message);
     }
   };
 
@@ -191,10 +207,8 @@ export function CreatorDashboard() {
                 <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                   <p className="text-sm text-gray-500 mb-1">Día de Corte Mensual</p>
                   <p className="font-medium text-gray-900">
-                    {deadline
-                      ? (!isNaN(Number(deadline)) && deadline.length <= 2
-                          ? `Día ${deadline} de cada mes`
-                          : new Date(deadline).toLocaleString("es-AR"))
+                    {cutoffDay
+                      ? `Día ${cutoffDay} de cada mes`
                       : "No establecido"}
                   </p>
                 </div>
@@ -283,12 +297,12 @@ export function CreatorDashboard() {
             </div>
 
             {/* Sección de reactivación */}
-            {deadline && (
+            {cutoffDay && (
               <div className="pt-6 border-t border-gray-100">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">Reactivar Suscripción</h2>
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Registrar renovación</h2>
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-medium text-emerald-900">Limpiar restricción y reactivar</h3>
+                    <h3 className="font-medium text-emerald-900">Registrar pago y reactivar</h3>
                     <p className="text-sm text-emerald-700 mt-1">
                       Elimina el bloqueo de acceso y restaura el uso normal de la aplicación.
                     </p>
@@ -298,7 +312,7 @@ export function CreatorDashboard() {
                     className="w-full md:w-auto bg-emerald-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 transition-colors flex items-center justify-center gap-2 shadow-sm"
                   >
                     <RotateCcw className="w-5 h-5" />
-                    Reactivar Servicio
+                    Registrar pago
                   </button>
                 </div>
               </div>

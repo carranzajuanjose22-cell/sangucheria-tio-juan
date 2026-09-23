@@ -50,4 +50,22 @@ const cloud_store = sqliteTable('cloud_store', {
   value: text('value'),
 });
 
-module.exports = { users, inputItems, services, paymentMethods, catalog, cloud_store };
+const subscription = sqliteTable('Subscription', {
+  id: text('id').primaryKey(),
+  cutoffDay: integer('cutoffDay'),
+  paidThrough: text('paidThrough'),
+  blocked: integer('blocked', { mode: 'boolean' }).notNull().default(false),
+  paymentWarning: integer('paymentWarning', { mode: 'boolean' }).notNull().default(false),
+  updatedAt: text('updatedAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+const subscriptionPayments = sqliteTable('SubscriptionPayment', {
+  id: text('id').primaryKey(),
+  paidAt: text('paidAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+  paidThrough: text('paidThrough').notNull(),
+  amount: real('amount'),
+  notes: text('notes'),
+  createdBy: text('createdBy').references(() => users.id),
+});
+
+module.exports = { users, inputItems, services, paymentMethods, catalog, cloud_store, subscription, subscriptionPayments };

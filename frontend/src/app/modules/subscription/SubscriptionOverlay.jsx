@@ -4,7 +4,7 @@ import { useSubscription } from "./SubscriptionContext.jsx";
 import { useLocation, useNavigate } from "react-router";
 
 export function SubscriptionOverlay() {
-  const { isWarningPhase, isExpired, userRole, deadline, setUserRole, paymentWarning } = useSubscription();
+  const { isWarningPhase, isExpired, userRole, daysRemaining, setUserRole, paymentWarning } = useSubscription();
   const [showWarning, setShowWarning] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -22,20 +22,7 @@ export function SubscriptionOverlay() {
     }
   }, [isWarningPhase, userRole]);
 
-  const getDaysRemaining = () => {
-    if (!deadline) return 0;
-
-    const cutoffDayNum = parseInt(deadline, 10);
-    if (!isNaN(cutoffDayNum) && cutoffDayNum >= 1 && cutoffDayNum <= 31 && deadline.length <= 2) {
-      const now = new Date();
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const actualCutoffDay = Math.min(cutoffDayNum, daysInMonth);
-      return Math.max(0, actualCutoffDay - now.getDate());
-    }
-
-    const diffMs = new Date(deadline).getTime() - new Date().getTime();
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  };
+  const getDaysRemaining = () => daysRemaining || 0;
 
   // Pantalla de bloqueo total si expiró (excepto creador, login y panel creador)
   if (isExpired && userRole !== "creator" && !isLoginPage && !isCreatorPage) {
@@ -76,6 +63,7 @@ export function SubscriptionOverlay() {
           <AlertTriangle className="w-5 h-5 text-white flex-shrink-0" />
           <div className="text-sm md:text-base font-medium text-center">
             ¡Aviso Importante! Su servicio vence en {getDaysRemaining()} {getDaysRemaining() === 1 ? "día" : "días"}. De no renovarse, se restringirá el acceso.
+            {paymentWarning && <div className="mt-1 font-bold">Aún no se detectó el pago del sistema.</div>}
           </div>
           <button
             onClick={() => setShowWarning(false)}

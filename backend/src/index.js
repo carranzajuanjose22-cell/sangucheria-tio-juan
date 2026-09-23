@@ -17,6 +17,7 @@ const serviceRoutes = require('./routes/serviceRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
 const storeRoutes = require('./routes/storeRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ app.get('/api/ping', (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/inputs', inputRoutes);
 app.use('/api/services', serviceRoutes);
