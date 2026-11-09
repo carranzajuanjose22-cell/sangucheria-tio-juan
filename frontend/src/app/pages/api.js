@@ -48,7 +48,7 @@ async function request(method, endpoint, data) {
 
   if (!response.ok) {
     const errData = await response.json().catch(() => null);
-    throw new Error(errData?.error || `Error en la petición ${method}`);
+    throw Object.assign(new Error(errData?.error || `Error en la petición ${method}`), { status: response.status });
   }
 
   if (response.status === 204) {

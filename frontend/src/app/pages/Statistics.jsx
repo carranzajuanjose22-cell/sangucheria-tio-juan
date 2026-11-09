@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { DollarSign, Package, Users, CreditCard, Wallet, TrendingUp, TrendingDown, ArrowRight, ShoppingCart, X, Calendar, ChevronRight, History } from "lucide-react";
 import { nonNegative, isAllowedDecimalInput, formatMoney, formatMoneyDebit, formatInputNumber, parseInputNumber } from "../utils/numbers.js";
 import { api } from "./api.js";
-import { buildEmployeeHoursStats, formatShiftHours } from "../utils/registerHours.js";
+import { AttendanceSummary } from "../components/AttendanceSummary.jsx";
 import { isDateInRange } from "../utils/dateRanges.js";
 
 export function Statistics() {
@@ -16,25 +16,22 @@ export function Statistics() {
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [catalog, setCatalog] = useState(null);
   const [currentExpenses, setCurrentExpenses] = useState([]);
-  const [registerState, setRegisterState] = useState(null);
   const [histPeriod, setHistPeriod] = useState("week");
   const [expandedPeriodKey, setExpandedPeriodKey] = useState(null);
 
   const loadData = async () => {
-    const [savedRegs, savedPurchases, savedCatalog, savedSales, savedExpenses, savedRegisterState] = await Promise.all([
+    const [savedRegs, savedPurchases, savedCatalog, savedSales, savedExpenses] = await Promise.all([
       api.get("/store/pos_registers").catch(() => []),
       api.get("/store/pos_purchases").catch(() => []),
       api.get("/catalog/MIGA").catch(() => null),
       api.get("/store/pos_sales").catch(() => []),
       api.get("/store/pos_expenses").catch(() => []),
-      api.get("/store/register_state").catch(() => null),
     ]);
     setRegisters(savedRegs || []);
     setPurchases(savedPurchases || []);
     setCatalog(savedCatalog);
     setCurrentSales(savedSales || []);
     setCurrentExpenses(savedExpenses || []);
-    setRegisterState(savedRegisterState);
   };
 
   useEffect(() => {
@@ -130,8 +127,6 @@ export function Statistics() {
   const allProducts = Object.entries(productStats)
     .map(([name, quantity]) => ({ name, quantity }))
     .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "es"));
-
-  const employeeHoursArray = buildEmployeeHoursStats(filteredRegisters, registerState, dateRange);
 
   const handleRegisterPurchase = async () => {
     const amount = nonNegative(parseInputNumber(purchaseAmount));
@@ -309,38 +304,7 @@ export function Statistics() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-gray-500" /> Horas Trabajadas por Cajero</h3>
-            <p className="text-sm text-gray-500 mt-0.5">Cada cajero suma horas cuando abre y cierra la misma sesión de caja</p>
-          </div>
-          <div className="p-6">
-            {employeeHoursArray.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No hay datos disponibles</p>
-            ) : (
-              <div className="space-y-4">
-                {employeeHoursArray.map((emp) => {
-                  const maxHours = Math.max(...employeeHoursArray.map((e) => e.hours));
-                  const percentage = maxHours > 0 ? (emp.hours / maxHours) * 100 : 0;
-                  return (
-                    <div key={emp.name}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="font-medium text-gray-900">{emp.name}</p>
-                          <p className="text-sm text-gray-500">{emp.shifts} turno{emp.shifts !== 1 ? "s" : ""}</p>
-                        </div>
-                        <p className="font-bold text-gray-900">{formatShiftHours(emp.hours)}</p>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div className="bg-brand-1 h-3 rounded-full transition-all" style={{ width: `${percentage}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+        <AttendanceSummary period={dateRange} />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

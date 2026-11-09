@@ -1,6 +1,7 @@
 'use strict';
 
 const { client } = require('../db');
+const { ensureAttendanceTables } = require('./attendanceSchema');
 
 async function ensureTables() {
   const statements = [
@@ -73,6 +74,7 @@ async function ensureTables() {
   for (const sql of statements) {
     await client.execute(sql);
   }
+  await ensureAttendanceTables(client);
   console.log('✅ Tablas verificadas/creadas en Turso.');
 }
 

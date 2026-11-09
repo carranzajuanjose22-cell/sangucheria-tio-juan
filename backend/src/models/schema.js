@@ -68,4 +68,27 @@ const subscriptionPayments = sqliteTable('SubscriptionPayment', {
   createdBy: text('createdBy').references(() => users.id),
 });
 
-module.exports = { users, inputItems, services, paymentMethods, catalog, cloud_store, subscription, subscriptionPayments };
+const attendanceShifts = sqliteTable('AttendanceShift', {
+  id: text('id').primaryKey(), employeeId: text('employee_id').notNull(),
+  employeeName: text('employee_name').notNull(), startedAt: integer('started_at').notNull(),
+  endedAt: integer('ended_at'), durationMinutes: integer('duration_minutes'),
+  version: integer('version').notNull().default(1), reviewed: integer('reviewed').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+});
+const attendanceAudit = sqliteTable('AttendanceAudit', {
+  id: text('id').primaryKey(), shiftId: text('shift_id').notNull(),
+  actorId: text('actor_id').notNull(), actorName: text('actor_name').notNull(),
+  changedAt: integer('changed_at').notNull(), reason: text('reason').notNull(),
+  beforeJson: text('before_json').notNull(), afterJson: text('after_json').notNull(),
+});
+const attendanceLegacy = sqliteTable('AttendanceLegacy', {
+  id: text('id').primaryKey(), capturedAt: text('captured_at').notNull(),
+  registersJson: text('registers_json').notNull(), openStateJson: text('open_state_json'),
+});
+const attendanceRequests = sqliteTable('AttendanceRequest', {
+  actorId: text('actor_id').notNull(), requestId: text('request_id').notNull(),
+  fingerprint: text('fingerprint').notNull(), responseJson: text('response_json').notNull(),
+});
+
+module.exports = { users, inputItems, services, paymentMethods, catalog, cloud_store, subscription, subscriptionPayments,
+  attendanceShifts, attendanceAudit, attendanceLegacy, attendanceRequests };

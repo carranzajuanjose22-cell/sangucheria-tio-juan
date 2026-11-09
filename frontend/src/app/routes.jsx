@@ -9,6 +9,8 @@ import { EmployeePos } from "./pages/EmployeePos.jsx";
 import { EmployeeSales } from "./pages/EmployeeSales.jsx";
 import { Registers } from "./pages/Registers.jsx";
 import { Statistics } from "./pages/Statistics.jsx";
+import { EmployeeAttendance } from "./pages/EmployeeAttendance.jsx";
+import { AttendanceAdmin } from "./pages/AttendanceAdmin.jsx";
 import { SubscriptionOverlay } from "./modules/subscription/index.jsx";
 import { CreatorDashboard } from "./modules/subscription/index.jsx";
 
@@ -100,6 +102,8 @@ export const router = createBrowserRouter([
           { path: "pos", Component: EmployeePos },
           { path: "registers", Component: Registers },
           { path: "statistics", Component: Statistics },
+          { path: "attendance", Component: AttendanceAdmin },
+          { path: "my-attendance", Component: EmployeeAttendance },
           { path: "users", Component: Users },
           { path: "settings", Component: Settings },
         ],
@@ -114,6 +118,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, Component: EmployeePos },
           { path: "sales", Component: EmployeeSales },
+          { path: "attendance", Component: EmployeeAttendance },
         ],
       },
       {

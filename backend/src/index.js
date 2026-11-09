@@ -37,6 +37,7 @@ app.use('/api/services', serviceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/store', storeRoutes);
+app.use('/api/attendance', require('./routes/attendanceRoutes').createProductionRouter());
 
 app.use((err, _req, res, _next) => {
   console.error('\n❌ ERROR INTERNO DEL SERVIDOR:', err);
