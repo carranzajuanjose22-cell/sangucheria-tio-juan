@@ -1,128 +1,117 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { api } from "../../pages/api.js";
 
 const SubscriptionContext = createContext(undefined);
+const EMPTY_STATUS = { deadline: null, paymentWarning: false, isWarningPhase: false, isExpired: false, daysRemaining: 0 };
+
+function readSession() {
+  const token = localStorage.getItem("pos_token");
+  try {
+    const user = JSON.parse(localStorage.getItem("pos_user"));
+    const role = user?.role === "Creador" ? "creator" : user?.role === "Admin" ? "admin" : user ? "employee" : null;
+    return { token, role };
+  } catch {
+    return { token, role: null };
+  }
+}
 
 export function SubscriptionProvider({ children }) {
-  const [deadline, setDeadlineState] = useState(() => {
-    return localStorage.getItem("subscription_deadline");
-  });
+  const [session, setSession] = useState(readSession);
+  const [snapshot, setSnapshot] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const requestVersion = useRef(0);
+  const saving = useRef(false);
+  const { token, role: userRole } = session;
 
-  const [userRole, setUserRoleState] = useState(() => {
-    return localStorage.getItem("userRole");
-  });
-
-  const [isWarningPhase, setIsWarningPhase] = useState(false);
-  const [isExpired, setIsExpired] = useState(false);
-  const [paymentWarning, setPaymentWarningState] = useState(() => {
-    return localStorage.getItem("payment_warning") === "true";
-  });
-
-  const setDeadline = (date) => {
-    localStorage.setItem("subscription_deadline", date);
-    setDeadlineState(date);
-  };
-
-  const clearDeadline = () => {
-    localStorage.removeItem("subscription_deadline");
-    setDeadlineState(null);
-  };
-
-  const setUserRole = (role) => {
-    if (role) {
-      localStorage.setItem("userRole", role);
-    } else {
-      localStorage.removeItem("userRole");
-    }
-    setUserRoleState(role);
-  };
-
-  const setPaymentWarning = (isActive) => {
-    if (isActive) {
-      localStorage.setItem("payment_warning", "true");
-    } else {
-      localStorage.removeItem("payment_warning");
-    }
-    setPaymentWarningState(isActive);
-  };
-
-  // Sincronizar role desde localStorage (por si cambia en otra pestaña)
+  // Estos valores antiguos eran exclusivos de cada navegador y no representan la suscripción real.
   useEffect(() => {
-    const syncRole = () => {
-      const stored = localStorage.getItem("userRole");
-      setUserRoleState(stored || null);
-    };
-    window.addEventListener("storage", syncRole);
-    return () => window.removeEventListener("storage", syncRole);
+    localStorage.removeItem("subscription_deadline");
+    localStorage.removeItem("payment_warning");
   }, []);
 
-  useEffect(() => {
-    const checkSubscription = () => {
-      if (!deadline) {
-        setIsWarningPhase(false);
-        setIsExpired(false);
-        return;
+  const setUserRole = useCallback((role) => {
+    if (role) localStorage.setItem("userRole", role);
+    else localStorage.removeItem("userRole");
+    requestVersion.current += 1;
+    setSession({ token: localStorage.getItem("pos_token"), role });
+  }, []);
+
+  const refreshSubscription = useCallback(async () => {
+    if (!token || saving.current) return;
+    const version = ++requestVersion.current;
+    try {
+      const data = await api.get("/subscription");
+      if (version === requestVersion.current && localStorage.getItem("pos_token") === token) {
+        setSnapshot({ token, data, error: null });
       }
+    } catch (error) {
+      if (version === requestVersion.current && localStorage.getItem("pos_token") === token) {
+        setSnapshot((previous) => ({ token, data: previous?.token === token ? previous.data : null, error: error.message }));
+      }
+    }
+  }, [token]);
 
-      const now = new Date();
-      const cutoffDayNum = parseInt(deadline, 10);
-
-      if (!isNaN(cutoffDayNum) && cutoffDayNum >= 1 && cutoffDayNum <= 31 && deadline.length <= 2) {
-        // Lógica mensual recurrente
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const currentDay = now.getDate();
-
-        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-        const actualCutoffDay = Math.min(cutoffDayNum, daysInMonth);
-
-        if (currentDay > actualCutoffDay) {
-          setIsExpired(true);
-          setIsWarningPhase(false);
-        } else if (actualCutoffDay - currentDay <= 5) {
-          setIsExpired(false);
-          setIsWarningPhase(true);
-        } else {
-          setIsExpired(false);
-          setIsWarningPhase(false);
-        }
-      } else {
-        // Fecha ISO absoluta
-        const deadlineDate = new Date(deadline);
-        const diffMs = deadlineDate.getTime() - now.getTime();
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-        if (diffMs <= 0) {
-          setIsExpired(true);
-          setIsWarningPhase(false);
-        } else if (diffDays <= 5) {
-          setIsExpired(false);
-          setIsWarningPhase(true);
-        } else {
-          setIsExpired(false);
-          setIsWarningPhase(false);
-        }
+  useEffect(() => {
+    refreshSubscription();
+    const interval = setInterval(refreshSubscription, 30000);
+    const syncSession = () => {
+      const next = readSession();
+      setSession((previous) => previous.token === next.token && previous.role === next.role ? previous : next);
+      refreshSubscription();
+    };
+    const handleStorage = (event) => {
+      if (!event.key || ["pos_token", "pos_user", "userRole"].includes(event.key)) syncSession();
+    };
+    const handleExpired = (event) => {
+      if (event.detail.token === token && localStorage.getItem("pos_token") === token && !saving.current) {
+        requestVersion.current += 1;
+        setSnapshot({ token, data: event.detail.subscription, error: null });
       }
     };
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", syncSession);
+    window.addEventListener("subscription:expired", handleExpired);
+    return () => {
+      requestVersion.current += 1;
+      clearInterval(interval);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", syncSession);
+      window.removeEventListener("subscription:expired", handleExpired);
+    };
+  }, [session, refreshSubscription]);
 
-    checkSubscription();
-    const interval = setInterval(checkSubscription, 60000);
-    return () => clearInterval(interval);
-  }, [deadline]);
+  const updateSubscription = useCallback(async (patch) => {
+    if (saving.current) throw new Error("Esperá a que termine el cambio anterior.");
+    saving.current = true;
+    setIsSaving(true);
+    const version = ++requestVersion.current;
+    try {
+      const data = await api.put("/subscription", patch);
+      if (version === requestVersion.current && localStorage.getItem("pos_token") === token) {
+        setSnapshot({ token, data, error: null });
+      }
+      return data;
+    } finally {
+      saving.current = false;
+      setIsSaving(false);
+    }
+  }, [token]);
 
+  const current = token && snapshot?.token === token ? snapshot : null;
   return (
-    <SubscriptionContext.Provider
-      value={{
-        deadline,
-        setDeadline,
-        clearDeadline,
-        isWarningPhase,
-        isExpired,
-        userRole,
-        setUserRole,
-        paymentWarning,
-        setPaymentWarning,
-      }}
-    >
+    <SubscriptionContext.Provider value={{
+      ...(current?.data || EMPTY_STATUS),
+      isLoading: Boolean(token && !current),
+      hasStatus: Boolean(current?.data),
+      error: current?.error || null,
+      isSaving,
+      userRole,
+      setUserRole,
+      refreshSubscription,
+      setDeadline: (deadline) => updateSubscription({ deadline }),
+      clearDeadline: () => updateSubscription({ deadline: null }),
+      setPaymentWarning: (paymentWarning) => updateSubscription({ paymentWarning }),
+    }}>
       {children}
     </SubscriptionContext.Provider>
   );
@@ -130,8 +119,6 @@ export function SubscriptionProvider({ children }) {
 
 export function useSubscription() {
   const context = useContext(SubscriptionContext);
-  if (context === undefined) {
-    throw new Error("useSubscription debe usarse dentro de SubscriptionProvider");
-  }
+  if (context === undefined) throw new Error("useSubscription debe usarse dentro de SubscriptionProvider");
   return context;
 }

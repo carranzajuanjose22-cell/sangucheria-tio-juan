@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "db:push": "node -e \"require('./src/models/migrate').ensureTables().then(() => { console.log('✅ db:push completado.'); process.exit(0); }).catch(e => { console.error(e); process.exit(1); })\""

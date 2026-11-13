@@ -4,14 +4,13 @@ import { useSubscription } from "./SubscriptionContext.jsx";
 import { useLocation, useNavigate } from "react-router";
 
 export function SubscriptionOverlay() {
-  const { isWarningPhase, isExpired, userRole, deadline, setUserRole, paymentWarning } = useSubscription();
+  const { isWarningPhase, isExpired, userRole, daysRemaining, setUserRole, paymentWarning, isLoading, hasStatus, error, refreshSubscription } = useSubscription();
   const [showWarning, setShowWarning] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
-  // No mostrar nada en la página de login ni en el panel de creador
+  // La página de login queda siempre accesible.
   const isLoginPage = location.pathname === "/";
-  const isCreatorPage = location.pathname === "/creator";
 
   // Aviso fijo en la parte superior
   useEffect(() => {
@@ -22,30 +21,30 @@ export function SubscriptionOverlay() {
     }
   }, [isWarningPhase, userRole]);
 
-  const getDaysRemaining = () => {
-    if (!deadline) return 0;
-
-    const cutoffDayNum = parseInt(deadline, 10);
-    if (!isNaN(cutoffDayNum) && cutoffDayNum >= 1 && cutoffDayNum <= 31 && deadline.length <= 2) {
-      const now = new Date();
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const actualCutoffDay = Math.min(cutoffDayNum, daysInMonth);
-      return Math.max(0, actualCutoffDay - now.getDate());
-    }
-
-    const diffMs = new Date(deadline).getTime() - new Date().getTime();
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const handleLogout = () => {
+    localStorage.removeItem("pos_token");
+    localStorage.removeItem("pos_user");
+    setUserRole(null);
+    navigate("/");
   };
 
-  // Pantalla de bloqueo total si expiró (excepto creador, login y panel creador)
-  if (isExpired && userRole !== "creator" && !isLoginPage && !isCreatorPage) {
-    const handleLogout = () => {
-      localStorage.removeItem("pos_token");
-      localStorage.removeItem("pos_user");
-      setUserRole(null);
-      navigate("/");
-    };
+  if (!isLoginPage && (isLoading || (error && !hasStatus))) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-50 p-6">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center" role="status">
+          <h2 className="text-xl font-bold mb-4">{error ? "No se pudo verificar la suscripción" : "Verificando suscripción…"}</h2>
+          {error && <>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button onClick={refreshSubscription} className="w-full bg-brand-1 text-white py-3 rounded-lg mb-3">Reintentar</button>
+            <button onClick={handleLogout} className="w-full bg-gray-100 py-3 rounded-lg">Cerrar sesión</button>
+          </>}
+        </div>
+      </div>
+    );
+  }
 
+  // El creador puede ingresar para reactivar el servicio.
+  if (isExpired && userRole !== "creator" && !isLoginPage) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-md bg-white/30">
         <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-center border border-gray-100">
@@ -68,14 +67,22 @@ export function SubscriptionOverlay() {
     );
   }
 
+  if (error && !isLoginPage) {
+    return (
+      <div role="status" className="fixed top-0 inset-x-0 z-[9999] bg-orange-100 text-orange-950 px-6 py-3 text-center">
+        No se pudo actualizar el estado de la suscripción. <button onClick={refreshSubscription} className="underline font-semibold">Reintentar</button>
+      </div>
+    );
+  }
+
   // Aviso de vencimiento fijo superior (estilo pestaña)
-  if (showWarning && userRole !== "creator" && !isLoginPage && !isCreatorPage) {
+  if (showWarning && userRole !== "creator" && !isLoginPage) {
     return (
       <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[9990] bg-orange-500 text-white shadow-lg rounded-b-2xl px-6 py-3 flex items-center justify-center animate-fade-in-down max-w-[95vw] sm:max-w-max border-b border-x border-orange-600">
         <div className="flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-white flex-shrink-0" />
           <div className="text-sm md:text-base font-medium text-center">
-            ¡Aviso Importante! Su servicio vence en {getDaysRemaining()} {getDaysRemaining() === 1 ? "día" : "días"}. De no renovarse, se restringirá el acceso.
+            ¡Aviso Importante! Su servicio vence en {daysRemaining} {daysRemaining === 1 ? "día" : "días"}. De no renovarse, se restringirá el acceso.
           </div>
           <button
             onClick={() => setShowWarning(false)}
@@ -90,7 +97,7 @@ export function SubscriptionOverlay() {
   }
 
   // Aviso de falta de pago (independiente de la bomba lógica)
-  if (paymentWarning && userRole !== "creator" && !isLoginPage && !isCreatorPage) {
+  if (paymentWarning && userRole !== "creator" && !isLoginPage) {
     return (
       <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[9989] bg-red-600 text-white shadow-lg rounded-b-2xl px-6 py-3 flex items-center justify-center animate-fade-in-down max-w-[95vw] sm:max-w-max border-b border-x border-red-700 mt-0 sm:mt-0" style={{ top: showWarning ? '60px' : '0' }}>
         <div className="flex items-center gap-3">

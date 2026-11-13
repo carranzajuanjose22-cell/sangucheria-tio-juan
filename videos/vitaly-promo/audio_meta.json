@@ -1,0 +1,93 @@
+{
+  "bgm": null,
+  "bgm_pending": false,
+  "voices": [
+    {
+      "frame": 1,
+      "path": "assets/voice-slow/01.wav",
+      "duration_s": 3.40275,
+      "words": []
+    },
+    {
+      "frame": 2,
+      "path": "assets/voice-slow/02.wav",
+      "duration_s": 3.88175,
+      "words": []
+    },
+    {
+      "frame": 3,
+      "path": "assets/voice-slow/03.wav",
+      "duration_s": 3.317792,
+      "words": []
+    },
+    {
+      "frame": 4,
+      "path": "assets/voice-slow/04.wav",
+      "duration_s": 3.273417,
+      "words": []
+    },
+    {
+      "frame": 5,
+      "path": "assets/voice-slow/05.wav",
+      "duration_s": 3.944917,
+      "words": []
+    },
+    {
+      "frame": 6,
+      "path": "assets/voice-slow/06.wav",
+      "duration_s": 3.241,
+      "words": []
+    }
+  ],
+  "sfx": [
+    {
+      "frame": 1,
+      "file": "assets/sfx/whoosh-short.mp3",
+      "offset_s": 0,
+      "duration_s": 0.57,
+      "volume": 0.35
+    },
+    {
+      "frame": 2,
+      "file": "assets/sfx/sparkle.mp3",
+      "offset_s": 0,
+      "duration_s": 1.8,
+      "volume": 0.35
+    },
+    {
+      "frame": 3,
+      "file": "assets/sfx/click-soft.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 4,
+      "file": "assets/sfx/whoosh-short.mp3",
+      "offset_s": 0,
+      "duration_s": 0.57,
+      "volume": 0.35
+    },
+    {
+      "frame": 4,
+      "file": "assets/sfx/click-soft.mp3",
+      "offset_s": 0,
+      "duration_s": 0.37,
+      "volume": 0.35
+    },
+    {
+      "frame": 5,
+      "file": "assets/sfx/chime.mp3",
+      "offset_s": 0,
+      "duration_s": 2.5,
+      "volume": 0.35
+    },
+    {
+      "frame": 6,
+      "file": "assets/sfx/sparkle.mp3",
+      "offset_s": 0,
+      "duration_s": 1.8,
+      "volume": 0.35
+    }
+  ]
+}

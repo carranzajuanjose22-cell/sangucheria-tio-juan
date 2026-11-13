@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, Outlet } from "react-router";
+import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 import { AdminLayout } from "./components/AdminLayout.jsx";
 import { EmployeeLayout } from "./components/EmployeeLayout.jsx";
 import { Dashboard } from "./pages/Dashboard.jsx";
@@ -11,6 +11,7 @@ import { Registers } from "./pages/Registers.jsx";
 import { Statistics } from "./pages/Statistics.jsx";
 import { SubscriptionOverlay } from "./modules/subscription/index.jsx";
 import { CreatorDashboard } from "./modules/subscription/index.jsx";
+import { useSubscription } from "./modules/subscription/index.jsx";
 
 function isTokenExpired(token) {
   try {
@@ -64,10 +65,13 @@ function RequireCreator({ children }) {
 }
 
 function RootLayout() {
+  const { isLoading, error, hasStatus, isExpired, userRole } = useSubscription();
+  const location = useLocation();
+  const blocked = location.pathname !== "/" && (isLoading || (error && !hasStatus) || (isExpired && userRole !== "creator"));
   return (
     <>
       <SubscriptionOverlay />
-      <Outlet />
+      {!blocked && <Outlet />}
     </>
   );
 }

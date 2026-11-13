@@ -69,7 +69,7 @@ function AlertModal({ open, type = "success", title, message, onClose }) {
 }
 
 export function CreatorDashboard() {
-  const { deadline, setDeadline, clearDeadline, isExpired, isWarningPhase, setUserRole, paymentWarning, setPaymentWarning } = useSubscription();
+  const { deadline, setDeadline, clearDeadline, isExpired, isWarningPhase, setUserRole, paymentWarning, setPaymentWarning, isSaving } = useSubscription();
   const [selectedDay, setSelectedDay] = useState("");
   const navigate = useNavigate();
 
@@ -84,14 +84,25 @@ export function CreatorDashboard() {
   React.useEffect(() => {
     if (deadline && !isNaN(Number(deadline)) && deadline.length <= 2) {
       setSelectedDay(deadline);
+    } else {
+      setSelectedDay("");
     }
   }, [deadline]);
 
+  const saveChange = async (action, type, title, message) => {
+    try {
+      await action();
+      showModal(type, title, message);
+    } catch (error) {
+      showModal("error", "No se pudo guardar el cambio", error.message);
+    }
+  };
+
   const handleStartSubscription = () => {
-    const day = parseInt(selectedDay, 10);
-    if (!isNaN(day) && day >= 1 && day <= 31) {
-      setDeadline(day.toString());
-      showModal(
+    const day = Number(selectedDay);
+    if (Number.isInteger(day) && day >= 1 && day <= 31) {
+      saveChange(
+        () => setDeadline(day.toString()),
         "success",
         "Período configurado",
         `El ciclo de suscripción fue configurado para el día ${day} de cada mes. Los avisos comenzarán 5 días antes del corte.`
@@ -106,8 +117,8 @@ export function CreatorDashboard() {
   };
 
   const handleReactivate = () => {
-    clearDeadline();
-    showModal(
+    saveChange(
+      clearDeadline,
       "success",
       "Servicio reactivado",
       "La restricción de uso fue levantada. Los usuarios pueden acceder a la aplicación con normalidad."
@@ -115,8 +126,8 @@ export function CreatorDashboard() {
   };
 
   const handleInstantBlock = () => {
-    setDeadline(new Date(0).toISOString());
-    showModal(
+    saveChange(
+      () => setDeadline(new Date(0).toISOString()),
       "success",
       "Servicio bloqueado",
       "El acceso a la aplicación ha sido bloqueado instantáneamente."
@@ -125,15 +136,16 @@ export function CreatorDashboard() {
 
   const handleTogglePaymentWarning = () => {
     const newState = !paymentWarning;
-    setPaymentWarning(newState);
     if (newState) {
-      showModal(
+      saveChange(
+        () => setPaymentWarning(newState),
         "warning",
         "Aviso de Pago Activado",
         "Se ha activado el aviso de falta de pago. Los usuarios verán una advertencia sobre la estabilidad del sistema."
       );
     } else {
-      showModal(
+      saveChange(
+        () => setPaymentWarning(newState),
         "success",
         "Aviso de Pago Desactivado",
         "El aviso de falta de pago ha sido removido."
@@ -183,7 +195,8 @@ export function CreatorDashboard() {
             <h1 className="text-2xl font-bold text-gray-900">Configuración de Suscripción</h1>
           </div>
 
-          <div className="p-6 space-y-8">
+          <fieldset disabled={isSaving} className="p-6 space-y-8 disabled:opacity-60">
+            {isSaving && <p role="status" className="text-sm text-gray-600">Guardando cambios…</p>}
             {/* Estado actual */}
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Estado Actual</h2>
@@ -269,7 +282,7 @@ export function CreatorDashboard() {
                 </div>
                 <button
                   onClick={handleInstantBlock}
-                  disabled={isExpired}
+                  disabled={isExpired || isSaving}
                   className={`w-full md:w-auto text-white font-semibold py-3 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors flex items-center justify-center gap-2 shadow-sm ${
                     isExpired
                       ? "bg-red-400 cursor-not-allowed"
@@ -338,7 +351,7 @@ export function CreatorDashboard() {
                 </button>
               </div>
             </div>
-          </div>
+          </fieldset>
         </div>
       </div>
     </div>

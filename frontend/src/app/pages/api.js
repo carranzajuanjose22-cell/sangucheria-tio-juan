@@ -21,9 +21,11 @@ function handleSessionExpired() {
 }
 
 async function request(method, endpoint, data) {
+  const requestToken = getToken();
   const options = {
     method,
     headers: getAuthHeaders(),
+    ...(endpoint === "/subscription" ? { cache: "no-store" } : {}),
   };
 
   if (data !== undefined) {
@@ -38,12 +40,15 @@ async function request(method, endpoint, data) {
   }
 
   if (response.status === 401 && endpoint !== "/auth/login") {
-    handleSessionExpired();
+    if (getToken() === requestToken) handleSessionExpired();
     throw new Error("Sesión expirada");
   }
 
   if (!response.ok) {
     const errData = await response.json().catch(() => null);
+    if (errData?.code === "SUBSCRIPTION_EXPIRED" && errData.subscription) {
+      window.dispatchEvent(new CustomEvent("subscription:expired", { detail: { subscription: errData.subscription, token: requestToken } }));
+    }
     throw new Error(errData?.error || `Error en la petición ${method}`);
   }
 

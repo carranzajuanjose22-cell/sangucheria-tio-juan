@@ -5,7 +5,10 @@ require('dotenv/config');
 const express = require('express');
 const cors = require('cors');
 const { ensureTables } = require('./models/migrate');
-const { db } = require('./db');
+const { db, client } = require('./db');
+const { authMiddleware } = require('./middleware/auth');
+const { createSubscriptionService } = require('./services/subscriptionService');
+const { createSubscriptionRouter, requireActiveSubscription } = require('./routes/subscriptionRoutes');
 const { users } = require('./models/schema');
 const { eq } = require('drizzle-orm');
 const bcrypt = require('bcryptjs');
@@ -29,6 +32,9 @@ app.get('/api/ping', (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+const subscriptionService = createSubscriptionService(client);
+app.use('/api/subscription', createSubscriptionRouter(subscriptionService));
+app.use('/api', authMiddleware, requireActiveSubscription(subscriptionService));
 app.use('/api/users', userRoutes);
 app.use('/api/inputs', inputRoutes);
 app.use('/api/services', serviceRoutes);
