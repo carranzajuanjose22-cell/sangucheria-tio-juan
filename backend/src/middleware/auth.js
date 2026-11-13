@@ -1,8 +1,9 @@
 'use strict';
 
 const jwt = require('jsonwebtoken');
+const subscriptionService = require('../services/subscriptionService');
 
-function authMiddleware(req, res, next) {
+function tokenOnlyMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -19,6 +20,28 @@ function authMiddleware(req, res, next) {
   }
 }
 
+function createAuthMiddleware(service = subscriptionService) {
+  return (req, res, next) => tokenOnlyMiddleware(req, res, async () => {
+    try {
+      if (req.user?.role !== 'Creador') {
+        const status = await service.getStatus();
+        if (status.isExpired) {
+          return res.status(402).json({
+            error: 'La suscripción del sistema está vencida.',
+            code: 'SUBSCRIPTION_EXPIRED',
+            subscription: status,
+          });
+        }
+      }
+      next();
+    } catch {
+      res.status(503).json({ error: 'No se pudo verificar la suscripción. Intentá nuevamente.' });
+    }
+  });
+}
+
+const authMiddleware = createAuthMiddleware();
+
 function adminOnly(req, res, next) {
   if (req.user?.role !== 'Admin') {
     return res.status(403).json({ error: 'Acceso restringido a administradores.' });
@@ -33,4 +56,4 @@ function creatorOnly(req, res, next) {
   next();
 }
 
-module.exports = { authMiddleware, adminOnly, creatorOnly };
+module.exports = { tokenOnlyMiddleware, authMiddleware, adminOnly, creatorOnly, createAuthMiddleware };

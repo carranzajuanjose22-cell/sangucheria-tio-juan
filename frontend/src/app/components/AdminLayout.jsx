@@ -1,6 +1,6 @@
 ﻿import { useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, Settings, Users, LogOut, Menu, X, Archive, BarChart3, ShoppingCart } from "lucide-react";
+import { LayoutDashboard, Settings, Users, LogOut, Menu, X, Archive, BarChart3, ShoppingCart, Clock } from "lucide-react";
 
 export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -12,6 +12,8 @@ export function AdminLayout() {
     { name: "Punto de Venta", href: "/admin/pos", icon: ShoppingCart },
     { name: "Cajas", href: "/admin/registers", icon: Archive },
     { name: "Estadísticas", href: "/admin/statistics", icon: BarChart3 },
+    { name: "Jornadas", href: "/admin/attendance", icon: Clock },
+    { name: "Mi jornada", href: "/admin/my-attendance", icon: Clock },
     { name: "Usuarios", href: "/admin/users", icon: Users },
     { name: "Configuración", href: "/admin/settings", icon: Settings },
   ];

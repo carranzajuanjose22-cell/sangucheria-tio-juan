@@ -1,23 +1,18 @@
 ﻿import { useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router";
-import { ShoppingCart, LogOut, Menu, X, Receipt } from "lucide-react";
+import { Link, useLocation } from "react-router";
+import { useEmployeeSession } from "../hooks/useEmployeeSession.jsx";
+import { ShoppingCart, LogOut, Menu, X, Receipt, Clock } from "lucide-react";
 
 export function EmployeeLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
+  const { handleLogout, logoutBusy, content, dialog } = useEmployeeSession();
 
   const navigation = [
+    { name: "Mi jornada", href: "/employee/attendance", icon: Clock },
     { name: "Punto de Venta", href: "/employee", icon: ShoppingCart },
     { name: "Ventas del Día", href: "/employee/sales", icon: Receipt },
   ];
-
-  const handleLogout = () => {
-    localStorage.removeItem("pos_token");
-    localStorage.removeItem("pos_user");
-    localStorage.removeItem("userRole");
-    navigate("/");
-  };
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -75,6 +70,7 @@ export function EmployeeLayout() {
           <div className="p-4 border-t border-gray-200 whitespace-nowrap overflow-hidden">
             <button
               onClick={handleLogout}
+              disabled={logoutBusy}
               className="flex items-center w-full px-2 py-3 text-gray-600 transition-colors rounded-lg hover:bg-brand-1/10 hover:text-brand-1-dark"
             >
               <LogOut className="flex-shrink-0 w-5 h-5 ml-1 mr-3 text-gray-400" />
@@ -101,9 +97,10 @@ export function EmployeeLayout() {
         </header>
 
         <main className="flex-1 overflow-auto bg-background p-6">
-          <Outlet />
+          {content}
         </main>
       </div>
+      {dialog}
     </div>
   );
 }

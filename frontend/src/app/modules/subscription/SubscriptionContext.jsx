@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { api } from "../../pages/api.js";
 
 const SubscriptionContext = createContext(undefined);
-const EMPTY_STATUS = { deadline: null, paymentWarning: false, isWarningPhase: false, isExpired: false, daysRemaining: 0 };
+const EMPTY_STATUS = { cutoffDay: null, paidThrough: null, paymentWarning: false, isWarningPhase: false, isExpired: false, daysRemaining: 0 };
 
 function readSession() {
   const token = localStorage.getItem("pos_token");
@@ -40,7 +40,7 @@ export function SubscriptionProvider({ children }) {
     if (!token || saving.current) return;
     const version = ++requestVersion.current;
     try {
-      const data = await api.get("/subscription");
+      const data = await api.get("/subscription/status");
       if (version === requestVersion.current && localStorage.getItem("pos_token") === token) {
         setSnapshot({ token, data, error: null });
       }
@@ -80,13 +80,13 @@ export function SubscriptionProvider({ children }) {
     };
   }, [session, refreshSubscription]);
 
-  const updateSubscription = useCallback(async (patch) => {
+  const updateSubscription = useCallback(async (method, endpoint, patch) => {
     if (saving.current) throw new Error("Esperá a que termine el cambio anterior.");
     saving.current = true;
     setIsSaving(true);
     const version = ++requestVersion.current;
     try {
-      const data = await api.put("/subscription", patch);
+      const data = await api[method](`/subscription/${endpoint}`, patch);
       if (version === requestVersion.current && localStorage.getItem("pos_token") === token) {
         setSnapshot({ token, data, error: null });
       }
@@ -101,6 +101,7 @@ export function SubscriptionProvider({ children }) {
   return (
     <SubscriptionContext.Provider value={{
       ...(current?.data || EMPTY_STATUS),
+      deadline: current?.data?.paidThrough || null,
       isLoading: Boolean(token && !current),
       hasStatus: Boolean(current?.data),
       error: current?.error || null,
@@ -108,9 +109,11 @@ export function SubscriptionProvider({ children }) {
       userRole,
       setUserRole,
       refreshSubscription,
-      setDeadline: (deadline) => updateSubscription({ deadline }),
-      clearDeadline: () => updateSubscription({ deadline: null }),
-      setPaymentWarning: (paymentWarning) => updateSubscription({ paymentWarning }),
+      setDeadline: (cutoffDay) => updateSubscription("put", "configure", { cutoffDay: Number(cutoffDay) }),
+      renewSubscription: (payment = {}) => updateSubscription("post", "renew", payment),
+      blockSubscription: () => updateSubscription("post", "block", {}),
+      clearDeadline: () => updateSubscription("post", "unblock", {}),
+      setPaymentWarning: (active) => updateSubscription("put", "payment-warning", { active }),
     }}>
       {children}
     </SubscriptionContext.Provider>

@@ -25,7 +25,7 @@ async function request(method, endpoint, data) {
   const options = {
     method,
     headers: getAuthHeaders(),
-    ...(endpoint === "/subscription" ? { cache: "no-store" } : {}),
+    ...(endpoint.startsWith("/subscription") ? { cache: "no-store" } : {}),
   };
 
   if (data !== undefined) {
@@ -49,7 +49,7 @@ async function request(method, endpoint, data) {
     if (errData?.code === "SUBSCRIPTION_EXPIRED" && errData.subscription) {
       window.dispatchEvent(new CustomEvent("subscription:expired", { detail: { subscription: errData.subscription, token: requestToken } }));
     }
-    throw new Error(errData?.error || `Error en la petición ${method}`);
+    throw Object.assign(new Error(errData?.error || `Error en la petición ${method}`), { status: response.status });
   }
 
   if (response.status === 204) {
